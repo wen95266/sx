@@ -1,0 +1,6 @@
+{
+  "name": "十三水多人对战 (Go语言 + Termux部署)",
+  "description": "基于Go语言开发的高性能十三水（Chinese Poker）多人对战系统，支持Termux移动端极速部署、局域网联机、智能理牌算法、打枪/全垒打/特殊牌型结算与在线实战演练。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

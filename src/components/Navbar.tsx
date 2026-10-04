@@ -74,8 +74,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               : 'hover:text-white'
           }`}
         >
-          <Play className="w-3.5 h-3.5" />
-          <span>对战演练</span>
+          <Play className="w-3.5 h-3.5 fill-current" />
+          <span className="font-bold">🀄 游戏大厅</span>
         </button>
 
         <button

@@ -153,6 +153,26 @@ export interface EmojiReaction {
   emoji: string;
 }
 
+export type RoomType = 'realtime' | 'scheduled'; // 实时场 vs 预约场
+
+export interface LobbyRoom {
+  id: string;
+  name: string;
+  type: RoomType;
+  baseScore: number; // 底分水数
+  minChips: number; // 准入筹码
+  playersCount: number; // 当前玩家数
+  maxPlayers: number; // 4
+  scheduledTime?: string; // 预约开赛时间 (仅预约场)
+  bookedPlayers?: { name: string; avatar: string; ready: boolean }[];
+  creatorName: string;
+  hasPassword?: boolean;
+  status: 'waiting' | 'in_progress' | 'booking';
+  allowChat: boolean; // 仅实时场为 true
+  description?: string;
+  tag?: string;
+}
+
 export type NetworkMode = 'online' | 'local';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';

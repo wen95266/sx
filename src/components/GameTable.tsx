@@ -9,7 +9,8 @@ import {
   SettlementSummary,
   ChatMessage,
   EmojiReaction,
-  ConnectionStatus
+  ConnectionStatus,
+  LobbyRoom
 } from '../types/game';
 import {
   createDeck,
@@ -61,7 +62,9 @@ import {
   Eye,
   Sliders,
   Radio,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ArrowLeft,
+  MessageSquareOff
 } from 'lucide-react';
 
 const QUICK_PHRASES = [
@@ -108,7 +111,16 @@ interface DanmuItem {
   topPercent: number;
 }
 
-export const GameTable: React.FC = () => {
+interface GameTableProps {
+  currentRoom?: LobbyRoom;
+  onBackToLobby?: () => void;
+}
+
+export const GameTable: React.FC<GameTableProps> = ({
+  currentRoom,
+  onBackToLobby
+}) => {
+  const allowChat = !currentRoom || currentRoom.allowChat;
   // Current user authentication
   const [currentUser, setCurrentUser] = useState<UserProfile>(getStoredUser());
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -652,7 +664,7 @@ export const GameTable: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col bg-slate-950 text-slate-100 select-none relative overflow-hidden">
       {/* Top Floating Danmu Overlay */}
-      {danmuEnabled && (
+      {danmuEnabled && allowChat && (
         <div className="absolute inset-x-0 top-16 bottom-24 pointer-events-none z-20 overflow-hidden">
           {activeDanmus.map((danmu) => (
             <div
@@ -674,8 +686,20 @@ export const GameTable: React.FC = () => {
 
       {/* Top Table Control Bar */}
       <div className="h-12 bg-slate-900/90 border-b border-slate-800/90 px-3 md:px-6 flex items-center justify-between z-30 shadow-md">
-        {/* Left: User Profile & Connection Pill */}
+        {/* Left: Back to Lobby + User Profile & Connection Pill */}
         <div className="flex items-center gap-2 md:gap-3">
+          {onBackToLobby && (
+            <button
+              type="button"
+              onClick={onBackToLobby}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-xs"
+              title="返回游戏大厅"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>返回大厅</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setShowAuthModal(true)}
@@ -692,6 +716,16 @@ export const GameTable: React.FC = () => {
               </div>
             </div>
           </button>
+
+          {/* Current Room Info Badge */}
+          {currentRoom && (
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-slate-950/80 border border-slate-800 rounded-xl text-xs">
+              <span className={currentRoom.type === 'realtime' ? 'text-amber-400 font-bold' : 'text-sky-400 font-bold'}>
+                {currentRoom.type === 'realtime' ? '🔥 实时场' : '📅 预约场'}
+              </span>
+              <span className="text-slate-400 font-medium truncate max-w-[140px]">{currentRoom.name}</span>
+            </div>
+          )}
 
           {/* Network Connection Status Indicator */}
           <div className="flex items-center gap-1.5 text-xs font-mono">
@@ -729,7 +763,7 @@ export const GameTable: React.FC = () => {
           </span>
         </div>
 
-        {/* Right: Quick Tools & Bot Guide Link */}
+        {/* Right: Quick Tools & Bot Guide Link & Chat */}
         <div className="flex items-center gap-1.5">
           {/* Bot ID & Token Guide Button */}
           <button
@@ -753,19 +787,21 @@ export const GameTable: React.FC = () => {
             <Radio className={`w-4 h-4 ${isSimulatingReconnect ? 'text-amber-400 animate-spin' : 'text-slate-400'}`} />
           </button>
 
-          {/* Danmu Toggle */}
-          <button
-            type="button"
-            onClick={() => setDanmuEnabled(!danmuEnabled)}
-            className={`px-2 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
-              danmuEnabled
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                : 'bg-slate-800 text-slate-400'
-            }`}
-            title="开/关 牌桌实时弹幕"
-          >
-            弹幕: {danmuEnabled ? '开' : '关'}
-          </button>
+          {/* Danmu Toggle (Only active in Realtime arena) */}
+          {allowChat && (
+            <button
+              type="button"
+              onClick={() => setDanmuEnabled(!danmuEnabled)}
+              className={`px-2 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                danmuEnabled
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'bg-slate-800 text-slate-400'
+              }`}
+              title="开/关 牌桌实时弹幕"
+            >
+              弹幕: {danmuEnabled ? '开' : '关'}
+            </button>
+          )}
 
           {/* Sound Toggle */}
           <button
@@ -777,18 +813,28 @@ export const GameTable: React.FC = () => {
             {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
           </button>
 
-          {/* Chat Toggle Button */}
-          <button
-            type="button"
-            onClick={() => setShowChat(!showChat)}
-            className="relative p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs cursor-pointer"
-            title="展开/收起 互动聊天抽屉"
-          >
-            <MessageCircle className="w-4 h-4 text-sky-400" />
-            {chatMessages.length > 1 && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-            )}
-          </button>
+          {/* Chat Toggle Button (Only in Realtime arena) */}
+          {allowChat ? (
+            <button
+              type="button"
+              onClick={() => setShowChat(!showChat)}
+              className="relative p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs cursor-pointer"
+              title="展开/收起 互动聊天抽屉"
+            >
+              <MessageCircle className="w-4 h-4 text-sky-400" />
+              {chatMessages.length > 1 && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              )}
+            </button>
+          ) : (
+            <div
+              className="flex items-center gap-1 px-2.5 py-1 bg-slate-800/80 border border-slate-700/80 rounded-xl text-slate-400 text-xs"
+              title="预约场专注比牌与赛事预定，聊天功能仅在实时场开放"
+            >
+              <MessageSquareOff className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden md:inline text-[11px]">预约场无聊天</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1378,39 +1424,53 @@ export const GameTable: React.FC = () => {
 
       {/* Floating In-Game Emoji & Chat Quick Bar (Bottom) */}
       <div className="h-11 bg-slate-900 border-t border-slate-800 px-3 md:px-6 flex items-center justify-between text-xs z-30">
-        {/* Left: Emoji Reaction Bar */}
-        <div className="flex items-center gap-1 overflow-x-auto py-1">
-          <span className="text-[10px] text-slate-400 hidden sm:inline mr-1">表情互动:</span>
-          {EMOJI_LIST.map((emo) => (
-            <button
-              key={emo}
-              type="button"
-              onClick={() => triggerReaction(me.id, emo)}
-              className="px-1.5 py-0.5 hover:bg-slate-800 rounded-lg text-base cursor-pointer transition-transform hover:scale-125"
-            >
-              {emo}
-            </button>
-          ))}
-        </div>
+        {allowChat ? (
+          <>
+            {/* Left: Emoji Reaction Bar */}
+            <div className="flex items-center gap-1 overflow-x-auto py-1">
+              <span className="text-[10px] text-slate-400 hidden sm:inline mr-1">表情互动:</span>
+              {EMOJI_LIST.map((emo) => (
+                <button
+                  key={emo}
+                  type="button"
+                  onClick={() => triggerReaction(me.id, emo)}
+                  className="px-1.5 py-0.5 hover:bg-slate-800 rounded-lg text-base cursor-pointer transition-transform hover:scale-125"
+                >
+                  {emo}
+                </button>
+              ))}
+            </div>
 
-        {/* Right: Quick Phrases Bar */}
-        <div className="flex items-center gap-1.5">
-          <select
-            onChange={(e) => {
-              if (e.target.value) {
-                addChatMessage('player_me', currentUser.nickname, e.target.value, currentUser.avatar);
-                e.target.value = '';
-              }
-            }}
-            defaultValue=""
-            className="bg-slate-950 border border-slate-700 text-slate-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:border-amber-500 cursor-pointer"
-          >
-            <option value="" disabled>💬 快捷挑衅与常用短语...</option>
-            {QUICK_PHRASES.map((phrase, idx) => (
-              <option key={idx} value={phrase}>{phrase}</option>
-            ))}
-          </select>
-        </div>
+            {/* Right: Quick Phrases Bar */}
+            <div className="flex items-center gap-1.5">
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    addChatMessage('player_me', currentUser.nickname, e.target.value, currentUser.avatar);
+                    e.target.value = '';
+                  }
+                }}
+                defaultValue=""
+                className="bg-slate-950 border border-slate-700 text-slate-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:border-amber-500 cursor-pointer"
+              >
+                <option value="" disabled>💬 快捷挑衅与常用短语...</option>
+                {QUICK_PHRASES.map((phrase, idx) => (
+                  <option key={idx} value={phrase}>{phrase}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        ) : (
+          <div className="w-full flex items-center justify-between text-xs text-slate-400 py-1">
+            <div className="flex items-center gap-2">
+              <MessageSquareOff className="w-4 h-4 text-sky-400 shrink-0" />
+              <span>当前为<strong>【预约场】</strong>定时竞技赛事，不开放局内聊天与弹幕以保证竞技公正。</span>
+            </div>
+            <span className="text-[11px] text-amber-400 font-medium hidden sm:inline">
+              如需聊天挑衅与弹幕互动，请返回大厅选择【🔥 实时场】
+            </span>
+          </div>
+        )}
       </div>
 
       {/* In-Game Chat Drawer (Toggleable) */}

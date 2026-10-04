@@ -16,12 +16,16 @@ import { DeploymentGuide } from './components/DeploymentGuide';
 import { RulesBook } from './components/RulesBook';
 import { AuthModal } from './components/AuthModal';
 import { BotConfigGuideModal } from './components/BotConfigGuideModal';
+import { GameLobby } from './components/GameLobby';
+import { LobbyRoom } from './types/game';
 import { getStoredUser, UserProfile } from './utils/authStorage';
 import { GO_SOURCE_FILES } from './utils/goSources';
 import { Download, X, CheckCircle2, FileText, Bot, Github } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<NavTabType>('webclient');
+  const [activeTab, setActiveTab] = useState<NavTabType>('game');
+  const [gameViewMode, setGameViewMode] = useState<'lobby' | 'table'>('lobby');
+  const [selectedRoom, setSelectedRoom] = useState<LobbyRoom | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile>(getStoredUser());
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showBotGuideModal, setShowBotGuideModal] = useState(false);
@@ -67,7 +71,7 @@ export default function App() {
         <div className="fixed top-2 right-2 z-50 flex items-center gap-2">
           <div className="px-2.5 py-1 rounded-full bg-slate-900/90 border border-emerald-500/40 text-emerald-300 text-[11px] font-mono shadow-lg backdrop-blur-sm hidden sm:flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>当前为部署后玩家独立纯净视角 (无开发者控制栏)</span>
+            <span>部署后独立纯净页面：{gameViewMode === 'lobby' ? '游戏大厅 (预约场/实时场)' : '牌桌对战中'}</span>
           </div>
           <button
             onClick={() => setStandalonePlayerMode(false)}
@@ -76,7 +80,23 @@ export default function App() {
             <span>返回站长工作台 ✕</span>
           </button>
         </div>
-        <GameTable />
+
+        {gameViewMode === 'lobby' ? (
+          <GameLobby
+            currentUser={currentUser}
+            onEnterRoom={(room) => {
+              setSelectedRoom(room);
+              setGameViewMode('table');
+            }}
+            onOpenAuth={() => setShowAuthModal(true)}
+            onOpenBotGuide={() => setShowBotGuideModal(true)}
+          />
+        ) : (
+          <GameTable
+            currentRoom={selectedRoom || undefined}
+            onBackToLobby={() => setGameViewMode('lobby')}
+          />
+        )}
       </div>
     );
   }
@@ -95,10 +115,30 @@ export default function App() {
 
       {/* Main Tab Content */}
       <main className="flex-1 flex flex-col">
-        {activeTab === 'game' && <GameTable />}
+        {activeTab === 'game' && (
+          gameViewMode === 'lobby' ? (
+            <GameLobby
+              currentUser={currentUser}
+              onEnterRoom={(room) => {
+                setSelectedRoom(room);
+                setGameViewMode('table');
+              }}
+              onOpenAuth={() => setShowAuthModal(true)}
+              onOpenBotGuide={() => setShowBotGuideModal(true)}
+            />
+          ) : (
+            <GameTable
+              currentRoom={selectedRoom || undefined}
+              onBackToLobby={() => setGameViewMode('lobby')}
+            />
+          )
+        )}
         {activeTab === 'webclient' && (
           <WebClientPreview
-            onOpenGame={() => setActiveTab('game')}
+            onOpenGame={() => {
+              setActiveTab('game');
+              setGameViewMode('lobby');
+            }}
             onToggleStandalonePlayerMode={() => setStandalonePlayerMode(true)}
           />
         )}

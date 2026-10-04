@@ -54,15 +54,15 @@ export const WebClientPreview: React.FC<WebClientPreviewProps> = ({
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const svgGitPushCmd = `# 1. 在本地克隆的仓库根目录下创建 cards 文件夹
-mkdir -p cards web/cards
+  const svgGitPushCmd = `# 1. 在本地克隆的仓库根目录下创建标准 public/cards 文件夹
+mkdir -p public/cards
 
-# 2. 您的 53 张扑克 SVG 文件已成功就绪：
+# 2. 您的 53 张扑克 SVG 文件统一保存在 public/cards/ 下：
 # ace_of_spades.svg, king_of_hearts.svg, 10_of_diamonds.svg, back.svg ...
 
 # 3. 提交并推送到 GitHub 仓库
-git add cards/ web/cards/
-git commit -m "feat: sync vector-playing-cards svg deck"
+git add public/cards/
+git commit -m "feat: sync vector-playing-cards svg deck into public/cards"
 git push origin main
 
 # 4. 在手机 Termux 运行更新即可秒级生效：
@@ -222,7 +222,7 @@ cd ~/shisanshui && git pull`;
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                路径已自动双向兼容：<code className="text-emerald-400 font-mono">/cards/</code> 与 <code className="text-sky-300 font-mono">web/cards/</code>，格式为标准英文命名。
+                已统一规范收归至单一静态目录：<code className="text-emerald-400 font-mono">public/cards/</code>（所有冗余重复文件夹已全部清理完毕，格式为标准英文命名）。
               </p>
             </div>
             <button

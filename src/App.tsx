@@ -31,7 +31,7 @@ export default function App() {
 
   // Export full Go codebase bundle as a single shell script package
   const handleExportAllCode = () => {
-    let scriptContent = '#!/usr/bin/env bash\n# 十三水 (Chinese Poker) Go 源码全集与 Telegram Bot 自动构建包\nmkdir -p shisanshui/cmd/server shisanshui/cmd/client shisanshui/pkg/game shisanshui/pkg/bot shisanshui/web/cards shisanshui/.github/workflows\ncd shisanshui\n\n';
+    let scriptContent = '#!/usr/bin/env bash\n# 十三水 (Chinese Poker) Go 源码全集与 Telegram Bot 自动构建包\nmkdir -p shisanshui/cmd/server shisanshui/cmd/client shisanshui/pkg/game shisanshui/pkg/bot shisanshui/public/cards shisanshui/.github/workflows\ncd shisanshui\n\n';
 
     GO_SOURCE_FILES.forEach((f) => {
       scriptContent += `cat << 'EOF' > ${f.path}\n${f.code}\nEOF\n\n`;

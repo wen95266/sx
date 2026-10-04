@@ -355,8 +355,12 @@ func main() {
 \t\t}
 \t\tw.Write([]byte(embeddedWebClientHTML))
 \t})
-\t// 托管 SVG 扑克牌图片目录 (支持玩家将 SVG 扑克上传至 web/cards/ 目录)
-\thttp.Handle("/cards/", http.StripPrefix("/cards/", http.FileServer(http.Dir("web/cards"))))
+\t// 托管 SVG 扑克牌图片目录 (自动兼容 cards/ 与 web/cards/)
+\tcardsDir := "web/cards"
+\tif _, err := os.Stat("cards"); err == nil {
+\t\tcardsDir = "cards"
+\t}
+\thttp.Handle("/cards/", http.StripPrefix("/cards/", http.FileServer(http.Dir(cardsDir))))
 \thttp.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 \thttp.HandleFunc("/ws", server.handleWebSocket)
 \thttp.HandleFunc("/api/info", func(w http.ResponseWriter, r *http.Request) {

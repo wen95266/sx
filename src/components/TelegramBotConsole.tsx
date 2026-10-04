@@ -17,8 +17,12 @@ import {
   Users,
   Radio,
   FileCode2,
-  AlertCircle
+  AlertCircle,
+  Key,
+  Sliders,
+  Sparkles
 } from 'lucide-react';
+import { BotConfigGuideModal } from './BotConfigGuideModal';
 
 interface TGMessage {
   id: string;
@@ -61,6 +65,7 @@ export const TelegramBotConsole: React.FC = () => {
   const [inputVal, setInputVal] = useState('');
   const [botToken, setBotToken] = useState('7182938491:AAH8...YOUR_TOKEN');
   const [adminId, setAdminId] = useState('583920192');
+  const [showGuideModal, setShowGuideModal] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [serverLogs, setServerLogs] = useState<ServerLog[]>([
     { id: 'l1', time: '14:28:10', type: 'info', text: 'WebSocket server listening on 0.0.0.0:8080' },
@@ -240,11 +245,46 @@ export const TelegramBotConsole: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs font-mono">
+          <button
+            onClick={() => setShowGuideModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 rounded-xl text-sky-300 text-xs font-semibold cursor-pointer transition-colors shadow-xs"
+          >
+            <Key className="w-3.5 h-3.5 text-sky-400" />
+            <span>Bot Token/ID 配置在何处？</span>
+          </button>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-mono">
             <Radio className="w-3.5 h-3.5 animate-pulse" />
             <span>轮询守护中 (0 丢包)</span>
           </div>
         </div>
+      </div>
+
+      {/* Prominent Bot ID & Token Configuration Location Card */}
+      <div className="bg-gradient-to-r from-slate-900 via-sky-950/40 to-slate-900 border border-sky-500/30 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0 mt-0.5">
+            <Key className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <span>📌 Bot 的 ID 和 Token 配置在哪里？（四大官方配置位置）</span>
+            </h3>
+            <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+              ① 启动命令参数：<code className="text-amber-300 bg-slate-950 px-1.5 py-0.5 rounded">-tg-token="xxx" -tg-admin="123"</code><br className="hidden sm:inline" />
+              ② 永久配置文件：<code className="text-emerald-300 bg-slate-950 px-1.5 py-0.5 rounded">shisanshui/config.json</code> 中的 <code className="text-emerald-300">telegram_bot</code> 段<br className="hidden sm:inline" />
+              ③ 系统环境变量：<code className="text-sky-300 bg-slate-950 px-1.5 py-0.5 rounded">export TG_BOT_TOKEN="xxx"</code> 与 <code className="text-sky-300 bg-slate-950 px-1.5 py-0.5 rounded">export TG_ADMIN_ID="123"</code><br className="hidden sm:inline" />
+              ④ 右侧控制台面板：直接在线输入并一键生成 Termux 完整运行指令。
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setShowGuideModal(true)}
+          className="shrink-0 px-4 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-md"
+        >
+          <Sliders className="w-4 h-4" />
+          <span>打开配置向导与教程</span>
+        </button>
       </div>
 
       {/* Main Grid: Telegram Chat on Left, Server Telemetry & Config on Right */}
@@ -451,6 +491,18 @@ export const TelegramBotConsole: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Bot Configuration Guide Modal */}
+      <BotConfigGuideModal
+        isOpen={showGuideModal}
+        onClose={() => setShowGuideModal(false)}
+        initialToken={botToken}
+        initialAdminId={adminId}
+        onSaveConfig={(t, id) => {
+          setBotToken(t);
+          setAdminId(id);
+        }}
+      />
     </div>
   );
 };

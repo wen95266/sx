@@ -10,8 +10,11 @@ import {
   Github,
   Globe,
   Cloud,
-  Smartphone
+  Smartphone,
+  User,
+  Key
 } from 'lucide-react';
+import { UserProfile } from '../utils/authStorage';
 
 export type NavTabType =
   | 'game'
@@ -28,12 +31,18 @@ interface NavbarProps {
   activeTab: NavTabType;
   setActiveTab: (tab: NavTabType) => void;
   onDownloadCode: () => void;
+  currentUser?: UserProfile;
+  onOpenAuth?: () => void;
+  onOpenBotGuide?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   setActiveTab,
-  onDownloadCode
+  onDownloadCode,
+  currentUser,
+  onOpenAuth,
+  onOpenBotGuide
 }) => {
   return (
     <header className="flex flex-col md:flex-row items-stretch md:items-center justify-between px-3 md:px-6 py-2 md:py-3 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-50 gap-2">
@@ -156,9 +165,32 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Zone 3: 1-2 primary actions */}
       <div className="flex items-center gap-2 self-end md:self-auto">
+        {onOpenBotGuide && (
+          <button
+            onClick={onOpenBotGuide}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+            title="查看 Bot ID 与 Token 配置位置与使用指南"
+          >
+            <Key className="w-3.5 h-3.5 text-sky-400" />
+            <span className="hidden sm:inline">Bot配置</span>
+          </button>
+        )}
+
+        {currentUser && onOpenAuth && (
+          <button
+            onClick={onOpenAuth}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+            title="管理玩家昵称、头像与战绩"
+          >
+            <span>{currentUser.avatar}</span>
+            <span className="hidden sm:inline font-bold">{currentUser.nickname}</span>
+            <span className="text-[10px] text-amber-400 font-mono">({currentUser.chips}水)</span>
+          </button>
+        )}
+
         <button
           onClick={onDownloadCode}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-950 bg-amber-400 rounded-lg hover:bg-amber-300 transition-colors shadow-sm cursor-pointer whitespace-nowrap"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-950 bg-amber-400 rounded-lg hover:bg-amber-300 transition-colors shadow-sm cursor-pointer whitespace-nowrap"
         >
           <Download className="w-3.5 h-3.5" />
           <span>导出完整代码包</span>

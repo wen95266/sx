@@ -14,11 +14,17 @@ import { CodeViewer } from './components/CodeViewer';
 import { TermuxSimulator } from './components/TermuxSimulator';
 import { DeploymentGuide } from './components/DeploymentGuide';
 import { RulesBook } from './components/RulesBook';
+import { AuthModal } from './components/AuthModal';
+import { BotConfigGuideModal } from './components/BotConfigGuideModal';
+import { getStoredUser, UserProfile } from './utils/authStorage';
 import { GO_SOURCE_FILES } from './utils/goSources';
 import { Download, X, CheckCircle2, FileText, Bot, Github } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTabType>('webclient');
+  const [currentUser, setCurrentUser] = useState<UserProfile>(getStoredUser());
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showBotGuideModal, setShowBotGuideModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [standalonePlayerMode, setStandalonePlayerMode] = useState(false);
@@ -82,6 +88,9 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onDownloadCode={() => setShowExportModal(true)}
+        currentUser={currentUser}
+        onOpenAuth={() => setShowAuthModal(true)}
+        onOpenBotGuide={() => setShowBotGuideModal(true)}
       />
 
       {/* Main Tab Content */}
@@ -172,6 +181,20 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* User Auth & Profile Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        currentUser={currentUser}
+        onUserChange={(updated) => setCurrentUser(updated)}
+      />
+
+      {/* Bot Configuration Guide Modal */}
+      <BotConfigGuideModal
+        isOpen={showBotGuideModal}
+        onClose={() => setShowBotGuideModal(false)}
+      />
 
       {/* Footer */}
       <footer className="px-6 py-4 border-t border-slate-900 bg-slate-950 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">

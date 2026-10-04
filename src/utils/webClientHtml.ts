@@ -88,8 +88,8 @@ export const STANDALONE_WEB_CLIENT_HTML = `<!DOCTYPE html>
     .card-top { font-size: 13px; line-height: 1; display: flex; align-items: center; gap: 1px; }
     .card-center { font-size: 18px; text-align: center; }
     .card-back {
-      background: repeating-linear-gradient(45deg, #1e3a8a, #1e3a8a 5px, #172554 5px, #172554 10px);
-      border: 2px solid #93c5fd;
+      background: url('/cards/back.svg') center/cover no-repeat, repeating-linear-gradient(45deg, #1e3a8a, #1e3a8a 5px, #172554 5px, #172554 10px);
+      border: 1px solid #93c5fd;
     }
     /* Dun Slots */
     .dun-row {
@@ -379,8 +379,17 @@ export const STANDALONE_WEB_CLIENT_HTML = `<!DOCTYPE html>
       render();
     }
 
+    function getCardSvgName(suit, rank, label) {
+      const rankMap = {
+        2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10',
+        11: 'jack', 12: 'queen', 13: 'king', 14: 'ace'
+      };
+      const rStr = rankMap[rank] || label.toLowerCase();
+      return rStr + '_of_' + suit.toLowerCase() + '.svg';
+    }
+
     function getCardInnerHtml(c) {
-      const svgUrl = '/cards/' + c.suit + '_' + c.label + '.svg';
+      const svgUrl = '/cards/' + getCardSvgName(c.suit, c.rank, c.label);
       return '<img src="' + svgUrl + '" onerror="this.style.display=\\'none\\'; this.nextElementSibling.style.display=\\'flex\\';" style="width:100%; height:100%; object-fit:contain; border-radius:4px; display:block;" />' +
         '<div style="display:none; width:100%; height:100%; flex-direction:column; justify-content:space-between;">' +
         '<div class="card-top"><span>' + c.label + '</span><span>' + SUIT_SYMBOLS[c.suit] + '</span></div>' +

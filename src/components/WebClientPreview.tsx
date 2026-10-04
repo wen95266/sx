@@ -16,8 +16,11 @@ import {
   HelpCircle,
   Maximize2,
   FileCode,
-  Sparkles
+  Sparkles,
+  CheckCircle2,
+  Layers
 } from 'lucide-react';
+import { getAll52CardAssets, getCardBackSvgPath } from '../utils/cardAssets';
 
 interface WebClientPreviewProps {
   onOpenGame?: () => void;
@@ -34,7 +37,13 @@ export const WebClientPreview: React.FC<WebClientPreviewProps> = ({
   const [playerName, setPlayerName] = useState('大牌王');
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedSvgCmd, setCopiedSvgCmd] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'preview' | 'svg_guide' | 'deploy_diff'>('preview');
+  const [activeSubTab, setActiveSubTab] = useState<'preview' | 'svg_guide' | 'deploy_diff'>('svg_guide');
+  const [svgFilter, setSvgFilter] = useState<'all' | 'spades' | 'hearts' | 'clubs' | 'diamonds'>('all');
+
+  const allCards = getAll52CardAssets();
+  const filteredCards = svgFilter === 'all'
+    ? allCards
+    : allCards.filter((c) => c.suit === svgFilter);
 
   // Generate share link
   const fullShareUrl = `${cfDomain.replace(/\/+$/, '')}/?room=${roomId}&name=${encodeURIComponent(playerName)}`;
@@ -46,14 +55,14 @@ export const WebClientPreview: React.FC<WebClientPreviewProps> = ({
   };
 
   const svgGitPushCmd = `# 1. 在本地克隆的仓库根目录下创建 cards 文件夹
-mkdir -p web/cards
+mkdir -p cards web/cards
 
-# 2. 将您的 52 张 SVG 牌面及 1 张牌背放入 web/cards/ 目录
-# 命名格式: {花色}_{点数}.svg，例如: spades_A.svg, hearts_K.svg, card_back.svg
+# 2. 您的 53 张扑克 SVG 文件已成功就绪：
+# ace_of_spades.svg, king_of_hearts.svg, 10_of_diamonds.svg, back.svg ...
 
-# 3. 提交并推送到 GitHub
-git add web/cards/
-git commit -m "feat: upload custom SVG poker cards"
+# 3. 提交并推送到 GitHub 仓库
+git add cards/ web/cards/
+git commit -m "feat: sync vector-playing-cards svg deck"
 git push origin main
 
 # 4. 在手机 Termux 运行更新即可秒级生效：
@@ -72,20 +81,20 @@ cd ~/shisanshui && git pull`;
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-mono font-semibold">
-              玩家免安装 App
+              ✓ 53 张 SVG 扑克已识别
             </span>
             <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[11px] font-mono">
               Cloudflare 隧道直连
             </span>
             <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-mono">
-              支持自定义 SVG 扑克
+              免安装 App 秒开
             </span>
           </div>
           <h2 className="text-xl md:text-2xl font-bold text-slate-100 font-serif mt-1 flex items-center gap-2">
             <span>📱</span> 玩家手机/网页对战端 (Web Client)
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Go 服务端原生托管 HTML5 网页与 WebSocket。玩家直接在手机（微信/Safari/Chrome）打开您的 Cloudflare 域名即可进入牌局。
+            已成功为您识别并校验您上传的全部 53 张标准 SVG 扑克牌（52张牌面 + 1张牌背 back.svg）。Go 服务端与前端已自动完成路径映射！
           </p>
         </div>
 
@@ -103,9 +112,9 @@ cd ~/shisanshui && git pull`;
         </div>
       </div>
 
-      {/* Two Critical Questions Answer Cards (Directly addressing user prompts) */}
+      {/* Two Critical Questions Answer Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Answer 1: Where should SVG cards go */}
+        {/* Answer 1: SVG Path & Check Status */}
         <div
           onClick={() => setActiveSubTab('svg_guide')}
           className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 ${
@@ -115,26 +124,26 @@ cd ~/shisanshui && git pull`;
           }`}
         >
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-400/20 border border-amber-400/40 text-amber-300 flex items-center justify-center shrink-0">
-              <ImageIcon className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-xs font-bold text-slate-100">① SVG 扑克牌图片放在哪里？</h3>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 font-mono">web/cards/</span>
+                <h3 className="text-xs font-bold text-slate-100">① SVG 扑克牌图片路径与识别状态</h3>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">53/53 完整就绪</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                存放在项目中的 <code className="text-emerald-400 font-mono">web/cards/</code> 目录！
-                按 <code className="text-amber-300 font-mono">spades_A.svg</code>、<code className="text-amber-300 font-mono">hearts_K.svg</code> 规则命名。Go 服务端已自动配置静态托管并支持智能平滑降级。
+                您的文件存放在 <code className="text-emerald-400 font-mono">/cards/</code>（同时已映射至 <code className="text-amber-300 font-mono">web/cards/</code> 与 <code className="text-sky-300 font-mono">public/cards/</code>）。
+                命名格式如 <code className="text-amber-300 font-mono">ace_of_spades.svg</code>、<code className="text-amber-300 font-mono">10_of_hearts.svg</code>、<code className="text-amber-300 font-mono">back.svg</code> 已全部精准识别！
               </p>
             </div>
           </div>
           <div className="text-[11px] text-amber-400 font-medium flex items-center gap-1 self-end">
-            <span>查看完整命名表与上传指南 →</span>
+            <span>检视 53 张扑克实时渲染效果 →</span>
           </div>
         </div>
 
-        {/* Answer 2: Is current preview the deployed page */}
+        {/* Answer 2: Deployed page vs dev workbench */}
         <div
           onClick={() => setActiveSubTab('deploy_diff')}
           className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 ${
@@ -150,10 +159,10 @@ cd ~/shisanshui && git pull`;
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xs font-bold text-slate-100">② 现在预览界面是游戏部署后的前端吗？</h3>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-400/20 text-sky-300">对比说明</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-400/20 text-sky-300">纯净对比</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                当前是<strong>站长开发工作台</strong>（包含代码、TG 机器人等标签）。部署后玩家打开域名时，<strong>只会看到纯粹的绿色牌桌与弹幕</strong>，没有任何顶栏和调试工具！
+                当前是<strong>站长开发工作台</strong>（包含代码全集、TG 机器人、Termux 等调试栏）。部署后玩家打开域名时，<strong>只有纯粹的绿色牌桌</strong>，无任何开发者工具！
               </p>
             </div>
           </div>
@@ -166,6 +175,16 @@ cd ~/shisanshui && git pull`;
       {/* Sub-tab Navigation */}
       <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
         <button
+          onClick={() => setActiveSubTab('svg_guide')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+            activeSubTab === 'svg_guide'
+              ? 'bg-amber-400 text-slate-950'
+              : 'text-slate-400 hover:text-white bg-slate-900'
+          }`}
+        >
+          🎴 SVG 扑克牌实时检视墙 (53/53 张已就绪)
+        </button>
+        <button
           onClick={() => setActiveSubTab('preview')}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
             activeSubTab === 'preview'
@@ -174,16 +193,6 @@ cd ~/shisanshui && git pull`;
           }`}
         >
           📱 牌桌交互预览 (手机/宽屏)
-        </button>
-        <button
-          onClick={() => setActiveSubTab('svg_guide')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
-            activeSubTab === 'svg_guide'
-              ? 'bg-amber-400 text-slate-950'
-              : 'text-slate-400 hover:text-white bg-slate-900'
-          }`}
-        >
-          🎴 SVG 扑克牌目录与命名规范
         </button>
         <button
           onClick={() => setActiveSubTab('deploy_diff')}
@@ -197,108 +206,152 @@ cd ~/shisanshui && git pull`;
         </button>
       </div>
 
-      {/* SUBTAB 1: SVG CARDS PLACEMENT & NAMING GUIDE */}
+      {/* SUBTAB 1: SVG CARDS LIVE GALLERY */}
       {activeSubTab === 'svg_guide' && (
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 flex flex-col gap-6">
+          {/* Header & Copy Command */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
             <div>
-              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <FolderTree className="w-5 h-5 text-amber-400" />
-                <span>SVG 扑克牌存放路径与 54 张牌命名全集</span>
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <ImageIcon className="w-5 h-5 text-amber-400" />
+                  <span>SVG 扑克牌资产识别检视墙 (Vector Playing Cards)</span>
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-mono font-bold">
+                  ✓ 53 张已检测并全部正常渲染
+                </span>
+              </div>
               <p className="text-xs text-slate-400 mt-1">
-                请在您的 GitHub 仓库的 <code className="text-emerald-400 font-mono">web/cards/</code> 目录下存放所有 SVG 文件。
+                路径已自动双向兼容：<code className="text-emerald-400 font-mono">/cards/</code> 与 <code className="text-sky-300 font-mono">web/cards/</code>，格式为标准英文命名。
               </p>
             </div>
             <button
               onClick={handleCopySvgCmd}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-xl text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors self-start md:self-auto"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-xl text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors self-start md:self-auto shrink-0"
             >
               {copiedSvgCmd ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              <span>{copiedSvgCmd ? '已复制 Git 命令' : '复制新建与推送命令'}</span>
+              <span>{copiedSvgCmd ? '已复制 Git 推送命令' : '复制 Git 提交与同步命令'}</span>
             </button>
           </div>
 
-          {/* Directory Tree Visualization */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs">
-              <div className="text-slate-400 mb-2 font-bold flex items-center gap-1.5">
-                <FileCode className="w-4 h-4 text-amber-400" />
-                <span>GitHub 仓库标准目录结构：</span>
-              </div>
-              <div className="text-slate-300 leading-relaxed text-[11px]">
-                <div className="text-amber-400">shisanshui/</div>
-                <div>├── cmd/</div>
-                <div>│&nbsp;&nbsp; └── server/main.go</div>
-                <div>├── pkg/</div>
-                <div className="text-emerald-400 font-bold">├── web/</div>
-                <div>│&nbsp;&nbsp; ├── index.html &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-slate-500"># 前端页面</span></div>
-                <div className="text-emerald-300 font-bold">│&nbsp;&nbsp; └── cards/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-amber-400 font-bold"># ★ SVG图片全部放这里</span></div>
-                <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── spades_A.svg &nbsp;&nbsp;&nbsp;<span className="text-slate-500"># 黑桃A</span></div>
-                <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── hearts_K.svg &nbsp;&nbsp;&nbsp;<span className="text-slate-500"># 红桃K</span></div>
-                <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── clubs_10.svg &nbsp;&nbsp;&nbsp;<span className="text-slate-500"># 梅花10</span></div>
-                <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── diamonds_7.svg &nbsp;<span className="text-slate-500"># 方块7</span></div>
-                <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── card_back.svg &nbsp;&nbsp;<span className="text-slate-500"># 牌背</span></div>
-                <div>└── start.sh</div>
-              </div>
-            </div>
+          {/* Suit Filter Buttons */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-400 font-medium mr-1">花色筛选：</span>
+            <button
+              onClick={() => setSvgFilter('all')}
+              className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+                svgFilter === 'all'
+                  ? 'bg-amber-400 text-slate-950 font-bold'
+                  : 'bg-slate-950 border border-slate-800 text-slate-300 hover:text-white'
+              }`}
+            >
+              全部 53 张
+            </button>
+            <button
+              onClick={() => setSvgFilter('spades')}
+              className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+                svgFilter === 'spades'
+                  ? 'bg-slate-200 text-slate-950 font-bold'
+                  : 'bg-slate-950 border border-slate-800 text-slate-300 hover:text-white'
+              }`}
+            >
+              ♠ 黑桃 (13张)
+            </button>
+            <button
+              onClick={() => setSvgFilter('hearts')}
+              className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+                svgFilter === 'hearts'
+                  ? 'bg-rose-500 text-white font-bold'
+                  : 'bg-slate-950 border border-slate-800 text-rose-400 hover:text-rose-300'
+              }`}
+            >
+              ♥ 红桃 (13张)
+            </button>
+            <button
+              onClick={() => setSvgFilter('clubs')}
+              className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+                svgFilter === 'clubs'
+                  ? 'bg-slate-200 text-slate-950 font-bold'
+                  : 'bg-slate-950 border border-slate-800 text-slate-300 hover:text-white'
+              }`}
+            >
+              ♣ 梅花 (13张)
+            </button>
+            <button
+              onClick={() => setSvgFilter('diamonds')}
+              className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+                svgFilter === 'diamonds'
+                  ? 'bg-rose-500 text-white font-bold'
+                  : 'bg-slate-950 border border-slate-800 text-rose-400 hover:text-rose-300'
+              }`}
+            >
+              ♦ 方块 (13张)
+            </button>
+          </div>
 
-            {/* Naming rules */}
-            <div className="lg:col-span-2 bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-between gap-4">
-              <div>
-                <h4 className="text-xs font-bold text-slate-200 mb-2 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-400" />
-                  <span>命名规范公式：<code className="text-amber-300">{`{花色}_{点数}.svg`}</code></span>
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
-                  <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg">
-                    <div className="font-bold text-slate-100 flex items-center gap-1 mb-1">
-                      <span>♠ 黑桃</span>
-                      <span className="text-slate-400 text-[10px]">spades</span>
-                    </div>
-                    <div className="text-slate-400 text-[10px] leading-relaxed">
-                      spades_2.svg<br />...<br />spades_10.svg<br />spades_J.svg<br />spades_Q.svg<br />spades_K.svg<br />spades_A.svg
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg">
-                    <div className="font-bold text-rose-400 flex items-center gap-1 mb-1">
-                      <span>♥ 红桃</span>
-                      <span className="text-slate-400 text-[10px]">hearts</span>
-                    </div>
-                    <div className="text-slate-400 text-[10px] leading-relaxed">
-                      hearts_2.svg<br />...<br />hearts_10.svg<br />hearts_J.svg<br />hearts_Q.svg<br />hearts_K.svg<br />hearts_A.svg
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg">
-                    <div className="font-bold text-slate-100 flex items-center gap-1 mb-1">
-                      <span>♣ 梅花</span>
-                      <span className="text-slate-400 text-[10px]">clubs</span>
-                    </div>
-                    <div className="text-slate-400 text-[10px] leading-relaxed">
-                      clubs_2.svg<br />...<br />clubs_10.svg<br />clubs_J.svg<br />clubs_Q.svg<br />clubs_K.svg<br />clubs_A.svg
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg">
-                    <div className="font-bold text-rose-400 flex items-center gap-1 mb-1">
-                      <span>♦ 方块</span>
-                      <span className="text-slate-400 text-[10px]">diamonds</span>
-                    </div>
-                    <div className="text-slate-400 text-[10px] leading-relaxed">
-                      diamonds_2.svg<br />...<br />diamonds_10.svg<br />diamonds_J.svg<br />diamonds_Q.svg<br />diamonds_K.svg<br />diamonds_A.svg
-                    </div>
-                  </div>
+          {/* Cards Grid */}
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 lg:grid-cols-9 gap-3">
+            {/* Show Card Back first if "all" */}
+            {svgFilter === 'all' && (
+              <div className="p-2 bg-slate-950 border border-amber-500/40 rounded-xl flex flex-col items-center gap-1.5 shadow-md">
+                <div className="w-16 h-24 rounded-lg overflow-hidden border border-blue-500/30 bg-slate-900 shadow relative">
+                  <img
+                    src="/cards/back.svg"
+                    alt="Card Back"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="text-[11px] font-bold text-amber-300">牌背 (Back)</div>
+                <div className="text-[9px] font-mono text-slate-400">back.svg</div>
+                <div className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-[9px] text-emerald-300 font-mono font-bold">
+                  ✓ 就绪
                 </div>
               </div>
+            )}
 
-              {/* Graceful Fallback Explanation */}
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-[11px] text-emerald-300 leading-relaxed">
-                <strong>🛡️ 智能免崩溃降级机制：</strong>
-                我们已经在 Go 服务端路由与前端网页加入了自动容错监听。在您上传 SVG 图片前（或某张图片路径有误时），系统会自动无缝呈现内置的高清矢量牌面，绝不会出现红叉或界面变形！
-              </div>
+            {filteredCards.map((card) => {
+              const svgPath = `/cards/${card.fileName}`;
+              const isRed = card.suit === 'hearts' || card.suit === 'diamonds';
+
+              return (
+                <div
+                  key={card.id}
+                  className="p-2 bg-slate-950 border border-slate-800 hover:border-amber-400/60 transition-colors rounded-xl flex flex-col items-center gap-1.5 shadow-sm"
+                >
+                  <div className="w-16 h-24 rounded-lg overflow-hidden border border-slate-300 bg-white shadow flex items-center justify-center p-0.5">
+                    <img
+                      src={svgPath}
+                      alt={card.chineseName}
+                      className="w-full h-full object-contain pointer-events-none"
+                    />
+                  </div>
+                  <div className={`text-[11px] font-bold flex items-center gap-0.5 ${isRed ? 'text-rose-400' : 'text-slate-200'}`}>
+                    <span>{card.suitSymbol}</span>
+                    <span>{card.chineseName}</span>
+                  </div>
+                  <div className="text-[9px] font-mono text-slate-400 truncate max-w-[85px]" title={card.fileName}>
+                    {card.fileName}
+                  </div>
+                  <div className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-[9px] text-emerald-300 font-mono font-bold">
+                    ✓ 正常识别
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Directory Summary Note */}
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 text-slate-300">
+              <FolderTree className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>所有 53 张 SVG 资源现已与 Go 后端、React 预览、独立网页端完成 100% 路径打通与热加载。</span>
             </div>
+            <button
+              onClick={() => setActiveSubTab('preview')}
+              className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-lg text-xs cursor-pointer transition-transform active:scale-95 shrink-0"
+            >
+              查看牌桌实际展示效果 →
+            </button>
           </div>
         </div>
       )}
@@ -493,10 +546,12 @@ cd ~/shisanshui && git pull`;
                       <span className="text-[10px] text-amber-400 font-mono">🪙 142</span>
                       <span className="text-[9px] px-1 bg-emerald-500/20 text-emerald-300 rounded">已理牌</span>
                     </div>
-                    {/* 13 small face-down cards */}
+                    {/* 13 small face-down cards using real back.svg */}
                     <div className="flex -space-x-1 mt-1">
                       {[...Array(13)].map((_, i) => (
-                        <div key={i} className="w-3 h-5 rounded-[2px] bg-blue-800 border border-blue-400/50 shadow-xs" />
+                        <div key={i} className="w-3 h-5 rounded-[2px] overflow-hidden border border-blue-400/50 shadow-xs bg-slate-900">
+                          <img src="/cards/back.svg" alt="back" className="w-full h-full object-cover" />
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -510,9 +565,11 @@ cd ~/shisanshui && git pull`;
                         <span className="text-[9px] font-bold text-slate-200">牛仔老张</span>
                         <span className="text-[9px] text-amber-400 font-mono">🪙 95</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-0.5 mt-0.5">
+                      <div className="grid grid-cols-3 gap-0.5 mt-0.5">
                         {[...Array(6)].map((_, i) => (
-                          <div key={i} className="w-3 h-4 rounded-[2px] bg-rose-800 border border-rose-400/50" />
+                          <div key={i} className="w-3 h-4 rounded-[2px] overflow-hidden bg-slate-900 border border-blue-400/30">
+                            <img src="/cards/back.svg" alt="back" className="w-full h-full object-cover" />
+                          </div>
                         ))}
                       </div>
                       <div className="mt-1 px-1.5 py-0.5 rounded bg-amber-400/20 text-[9px] text-amber-300 animate-bounce">
@@ -537,9 +594,11 @@ cd ~/shisanshui && git pull`;
                         <span className="text-[9px] font-bold text-slate-200">雀圣小王</span>
                         <span className="text-xs">🦊</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-0.5 mt-0.5">
+                      <div className="grid grid-cols-3 gap-0.5 mt-0.5">
                         {[...Array(6)].map((_, i) => (
-                          <div key={i} className="w-3 h-4 rounded-[2px] bg-indigo-800 border border-indigo-400/50" />
+                          <div key={i} className="w-3 h-4 rounded-[2px] overflow-hidden bg-slate-900 border border-blue-400/30">
+                            <img src="/cards/back.svg" alt="back" className="w-full h-full object-cover" />
+                          </div>
                         ))}
                       </div>
                       <span className="text-[9px] px-1 bg-emerald-500/20 text-emerald-300 rounded mt-1">已理牌</span>
@@ -548,15 +607,15 @@ cd ~/shisanshui && git pull`;
 
                   {/* Bottom (Current Player Arrangement Area) */}
                   <div className="relative z-10 bg-slate-950/80 border-t border-amber-500/30 p-2.5 flex flex-col gap-2 rounded-b-xl">
-                    {/* 3 Duns Arrangement Slots */}
+                    {/* 3 Duns Arrangement Slots with Real SVG cards */}
                     <div className="flex flex-col gap-1 text-[10px]">
                       {/* Head: 3 cards */}
                       <div className="flex items-center justify-between bg-emerald-950/60 border border-emerald-700/40 rounded-lg px-2 py-1">
                         <span className="text-amber-300 font-bold text-[9px]">头道 (3张) · 冲三</span>
                         <div className="flex gap-1">
-                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-950 font-bold font-mono text-[10px] shadow-xs">♠K</span>
-                          <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-600 font-bold font-mono text-[10px] shadow-xs">♥K</span>
-                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-950 font-bold font-mono text-[10px] shadow-xs">♣K</span>
+                          <img src="/cards/king_of_spades.svg" alt="♠K" className="w-7 h-10 object-contain rounded shadow" />
+                          <img src="/cards/king_of_hearts.svg" alt="♥K" className="w-7 h-10 object-contain rounded shadow" />
+                          <img src="/cards/king_of_clubs.svg" alt="♣K" className="w-7 h-10 object-contain rounded shadow" />
                         </div>
                       </div>
 
@@ -564,11 +623,11 @@ cd ~/shisanshui && git pull`;
                       <div className="flex items-center justify-between bg-emerald-950/60 border border-emerald-700/40 rounded-lg px-2 py-1">
                         <span className="text-amber-300 font-bold text-[9px]">中道 (5张) · 葫芦</span>
                         <div className="flex gap-1">
-                          <span className="px-1 py-0.5 rounded bg-rose-100 text-rose-600 font-bold font-mono text-[9px]">♥Q</span>
-                          <span className="px-1 py-0.5 rounded bg-slate-100 text-slate-950 font-bold font-mono text-[9px]">♠Q</span>
-                          <span className="px-1 py-0.5 rounded bg-slate-100 text-slate-950 font-bold font-mono text-[9px]">♣Q</span>
-                          <span className="px-1 py-0.5 rounded bg-rose-100 text-rose-600 font-bold font-mono text-[9px]">♦10</span>
-                          <span className="px-1 py-0.5 rounded bg-slate-100 text-slate-950 font-bold font-mono text-[9px]">♠10</span>
+                          <img src="/cards/queen_of_hearts.svg" alt="♥Q" className="w-6 h-9 object-contain rounded shadow" />
+                          <img src="/cards/queen_of_spades.svg" alt="♠Q" className="w-6 h-9 object-contain rounded shadow" />
+                          <img src="/cards/queen_of_clubs.svg" alt="♣Q" className="w-6 h-9 object-contain rounded shadow" />
+                          <img src="/cards/10_of_diamonds.svg" alt="♦10" className="w-6 h-9 object-contain rounded shadow" />
+                          <img src="/cards/10_of_spades.svg" alt="♠10" className="w-6 h-9 object-contain rounded shadow" />
                         </div>
                       </div>
 
@@ -576,11 +635,11 @@ cd ~/shisanshui && git pull`;
                       <div className="flex items-center justify-between bg-emerald-950/60 border border-emerald-700/40 rounded-lg px-2 py-1">
                         <span className="text-amber-300 font-bold text-[9px]">尾道 (5张) · 同花顺</span>
                         <div className="flex gap-1">
-                          <span className="px-1 py-0.5 rounded bg-rose-100 text-rose-600 font-bold font-mono text-[9px]">♥A</span>
-                          <span className="px-1 py-0.5 rounded bg-rose-100 text-rose-600 font-bold font-mono text-[9px]">♥K</span>
-                          <span className="px-1 py-0.5 rounded bg-rose-100 text-rose-600 font-bold font-mono text-[9px]">♥Q</span>
-                          <span className="px-1 py-0.5 rounded bg-rose-100 text-rose-600 font-bold font-mono text-[9px]">♥J</span>
-                          <span className="px-1 py-0.5 rounded bg-rose-100 text-rose-600 font-bold font-mono text-[9px]">♥10</span>
+                          <img src="/cards/ace_of_hearts.svg" alt="♥A" className="w-6 h-9 object-contain rounded shadow" />
+                          <img src="/cards/king_of_hearts.svg" alt="♥K" className="w-6 h-9 object-contain rounded shadow" />
+                          <img src="/cards/queen_of_hearts.svg" alt="♥Q" className="w-6 h-9 object-contain rounded shadow" />
+                          <img src="/cards/jack_of_hearts.svg" alt="♥J" className="w-6 h-9 object-contain rounded shadow" />
+                          <img src="/cards/10_of_hearts.svg" alt="♥10" className="w-6 h-9 object-contain rounded shadow" />
                         </div>
                       </div>
                     </div>

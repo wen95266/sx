@@ -136,3 +136,10 @@ export function recordGameResult(deltaChips: number, isWin: boolean, gunShotsCou
   saveUser(user);
   return user;
 }
+
+export function addChips(amount: number): UserProfile {
+  const user = getStoredUser();
+  user.chips = Math.max(0, user.chips + amount);
+  saveUser(user);
+  return user;
+}

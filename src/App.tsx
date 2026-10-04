@@ -90,6 +90,7 @@ export default function App() {
             }}
             onOpenAuth={() => setShowAuthModal(true)}
             onOpenBotGuide={() => setShowBotGuideModal(true)}
+            onUpdateUser={(u) => setCurrentUser(u)}
           />
         ) : (
           <GameTable
@@ -125,6 +126,7 @@ export default function App() {
               }}
               onOpenAuth={() => setShowAuthModal(true)}
               onOpenBotGuide={() => setShowBotGuideModal(true)}
+              onUpdateUser={(u) => setCurrentUser(u)}
             />
           ) : (
             <GameTable

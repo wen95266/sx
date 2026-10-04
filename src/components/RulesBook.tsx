@@ -173,6 +173,36 @@ export const RulesBook: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Arena Types and Chat Rules */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 flex flex-col gap-4">
+        <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
+          <Flame className="w-4 h-4 text-amber-400" />
+          <span>5. 游戏大厅两大板块与竞技聊天规范</span>
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div className="p-4 bg-slate-950 border border-amber-500/30 rounded-xl flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-amber-400 text-sm">🔥 实时场 (即时开黑)</span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">聊天全开放</span>
+            </div>
+            <p className="text-slate-400 leading-relaxed">
+              随到随打、一键秒入。全面支持<strong>局内抽屉聊天、发光飘屏弹幕 (Danmu)、8+ 闽南特色快捷短语与 3D 表情弹跳</strong>，气氛火热热血博弈。
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-950 border border-sky-500/30 rounded-xl flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-sky-400 text-sm">📅 预约场 (定时赛事)</span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold">静音无聊天</span>
+            </div>
+            <p className="text-slate-400 leading-relaxed">
+              定时开赛、席位预定。为确保锦标赛与预约对局的绝对公平专业，<strong>严禁局内聊天与弹幕</strong>，杜绝打暗号与杂音，专注于纯牌技较量。
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

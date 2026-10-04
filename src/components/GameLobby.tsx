@@ -19,16 +19,19 @@ import {
   Check,
   ArrowRight,
   Search,
-  Filter
+  Filter,
+  Gift
 } from 'lucide-react';
 import { LobbyRoom, RoomType } from '../types/game';
-import { UserProfile } from '../utils/authStorage';
+import { UserProfile, addChips } from '../utils/authStorage';
+import { SoundEffects } from '../utils/audio';
 
 interface GameLobbyProps {
   currentUser: UserProfile;
   onEnterRoom: (room: LobbyRoom) => void;
   onOpenAuth: () => void;
   onOpenBotGuide: () => void;
+  onUpdateUser?: (user: UserProfile) => void;
 }
 
 const DEFAULT_SCHEDULED_ROOMS: LobbyRoom[] = [
@@ -92,7 +95,7 @@ const DEFAULT_SCHEDULED_ROOMS: LobbyRoom[] = [
   },
   {
     id: 'sched_4',
-    name: '⚔️ 明日 20:00 · 巅峰万元巅峰大奖赛',
+    name: '⚔️ 明日 20:00 · 巅峰万元大奖争霸赛',
     type: 'scheduled',
     baseScore: 200,
     minChips: 2000,
@@ -125,7 +128,7 @@ const DEFAULT_REALTIME_ROOMS: LobbyRoom[] = [
     status: 'waiting',
     allowChat: true,
     tag: '秒速开局',
-    description: '门槛低、节奏快！支持实时聊天、局内飘屏弹幕与表情互动。'
+    description: '门槛低、节奏快！支持实时文字聊天、局内飘屏弹幕与表情互动。'
   },
   {
     id: 'live_master',
@@ -175,7 +178,8 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
   currentUser,
   onEnterRoom,
   onOpenAuth,
-  onOpenBotGuide
+  onOpenBotGuide,
+  onUpdateUser
 }) => {
   const [activeTab, setActiveTab] = useState<RoomType>('realtime');
   const [scheduledRooms, setScheduledRooms] = useState<LobbyRoom[]>(DEFAULT_SCHEDULED_ROOMS);
@@ -185,9 +189,23 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
   const [newRoomBaseScore, setNewRoomBaseScore] = useState(50);
   const [newScheduledTime, setNewScheduledTime] = useState('今晚 20:30');
   const [bookedSuccessTip, setBookedSuccessTip] = useState<string | null>(null);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [selectedTag, setSelectedTag] = useState<string>('all');
+
+  const handleClaimBonus = () => {
+    const updated = addChips(1000);
+    if (onUpdateUser) onUpdateUser(updated);
+    SoundEffects.playFanfare();
+    setBookedSuccessTip('🎁 成功领取每日救济补助：+1,000 水！祝您把把通天大顺！');
+    setTimeout(() => setBookedSuccessTip(null), 3000);
+  };
 
   const handleQuickMatch = () => {
-    // Pick the most suitable realtime room based on player's chips
+    // Check if chips are enough for beginner
+    if (currentUser.chips < 100) {
+      handleClaimBonus();
+    }
+
     const room =
       currentUser.chips >= 2000
         ? realtimeRooms[2]
@@ -197,14 +215,26 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
     onEnterRoom(room);
   };
 
+  const handleEnterRealtimeRoom = (room: LobbyRoom) => {
+    if (currentUser.chips < room.minChips) {
+      const updated = addChips(1000);
+      if (onUpdateUser) onUpdateUser(updated);
+      setBookedSuccessTip(`⚠️ 筹码不足（需 ${room.minChips} 水），已自动为您补发 +1,000 水！正在进入房间...`);
+      setTimeout(() => {
+        setBookedSuccessTip(null);
+        onEnterRoom(room);
+      }, 1200);
+      return;
+    }
+    onEnterRoom(room);
+  };
+
   const handleBookScheduledRoom = (room: LobbyRoom) => {
-    // If room is full, enter directly
     if (room.playersCount >= 4) {
       onEnterRoom(room);
       return;
     }
 
-    // Add current user to booked list if not already there
     const isBooked = room.bookedPlayers?.some(p => p.name === currentUser.nickname);
     if (!isBooked) {
       const updated = scheduledRooms.map(r => {
@@ -220,9 +250,8 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
       });
       setScheduledRooms(updated);
       setBookedSuccessTip(`🎉 成功预约 [${room.name}]！开赛时间：${room.scheduledTime}`);
-      setTimeout(() => setBookedSuccessTip(null), 3000);
+      setTimeout(() => setBookedSuccessTip(null), 3500);
     } else {
-      // Enter the scheduled table
       onEnterRoom(room);
     }
   };
@@ -271,6 +300,18 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
     setNewRoomName('');
   };
 
+  // Filtered rooms
+  const currentRoomsList = activeTab === 'realtime' ? realtimeRooms : scheduledRooms;
+  const filteredRooms = currentRoomsList.filter(r => {
+    const matchesKeyword =
+      !searchKeyword ||
+      r.name.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+      r.description?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+      r.tag?.toLowerCase().includes(searchKeyword.toLowerCase());
+    const matchesTag = selectedTag === 'all' || r.tag === selectedTag;
+    return matchesKeyword && matchesTag;
+  });
+
   return (
     <div className="flex-1 flex flex-col bg-slate-950 text-slate-100 select-none overflow-y-auto">
       {/* Lobby Hero Banner & Identity Bar */}
@@ -296,11 +337,19 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                   {currentUser.totalGames} 场战绩
                 </span>
               </div>
-              <div className="flex items-center gap-3 mt-1 text-xs">
+              <div className="flex flex-wrap items-center gap-2.5 mt-1 text-xs">
                 <div className="flex items-center gap-1.5 text-amber-400 font-mono font-bold text-sm">
                   <Coins className="w-4 h-4" />
                   <span>{currentUser.chips.toLocaleString()} 水</span>
                 </div>
+                <button
+                  onClick={handleClaimBonus}
+                  className="px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 text-[11px] font-medium flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95"
+                  title="免费领取每日筹码水数"
+                >
+                  <Gift className="w-3 h-3 text-amber-400" />
+                  <span>领补助 +1,000水</span>
+                </button>
                 <button
                   onClick={onOpenAuth}
                   className="text-[11px] text-sky-400 hover:text-sky-300 underline cursor-pointer"
@@ -332,7 +381,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
         </div>
       </div>
 
-      {/* Booked Success Alert */}
+      {/* Booked Success / Toast Alert */}
       {bookedSuccessTip && (
         <div className="max-w-6xl mx-auto w-full px-4 pt-4">
           <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-xs text-emerald-300 font-medium flex items-center gap-2 animate-in fade-in">
@@ -348,7 +397,10 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
         <div className="grid grid-cols-2 gap-3 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
           {/* Tab 1: 实时场 (Real-Time Live Arena) */}
           <button
-            onClick={() => setActiveTab('realtime')}
+            onClick={() => {
+              setActiveTab('realtime');
+              setSelectedTag('all');
+            }}
             className={`p-3 md:p-4 rounded-xl flex items-center justify-center gap-2 md:gap-3 transition-all cursor-pointer ${
               activeTab === 'realtime'
                 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-lg scale-[1.01]'
@@ -375,7 +427,10 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
 
           {/* Tab 2: 预约场 (Scheduled Booking Arena) */}
           <button
-            onClick={() => setActiveTab('scheduled')}
+            onClick={() => {
+              setActiveTab('scheduled');
+              setSelectedTag('all');
+            }}
             className={`p-3 md:p-4 rounded-xl flex items-center justify-center gap-2 md:gap-3 transition-all cursor-pointer ${
               activeTab === 'scheduled'
                 ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black shadow-lg scale-[1.01]'
@@ -401,6 +456,70 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
           </button>
         </div>
 
+        {/* Filter and Search Bar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+          <div className="flex items-center gap-1.5 overflow-x-auto">
+            <span className="text-[11px] text-slate-400 mr-1 shrink-0 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-slate-500" />
+              <span>筛选:</span>
+            </span>
+            <button
+              onClick={() => setSelectedTag('all')}
+              className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors shrink-0 ${
+                selectedTag === 'all'
+                  ? 'bg-amber-400 text-slate-950 font-bold'
+                  : 'bg-slate-800 text-slate-300 hover:text-white'
+              }`}
+            >
+              全部房间
+            </button>
+            {activeTab === 'realtime' ? (
+              <>
+                {['秒速开局', '激烈切磋', '巨额注池', '好友专桌'].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setSelectedTag(t)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors shrink-0 ${
+                      selectedTag === t
+                        ? 'bg-amber-400 text-slate-950 font-bold'
+                        : 'bg-slate-800 text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </>
+            ) : (
+              <>
+                {['官方赛事', '好友私房', '娱乐练手', '高额赏金'].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setSelectedTag(t)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors shrink-0 ${
+                      selectedTag === t
+                        ? 'bg-sky-400 text-slate-950 font-bold'
+                        : 'bg-slate-800 text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+
+          <div className="relative w-full sm:w-64">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              placeholder="搜索房间名、房主或标签..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+            />
+          </div>
+        </div>
+
         {/* SECTION 1: 实时场 (REALTIME ARENA WITH LIVE CHAT & DANMU) */}
         {activeTab === 'realtime' && (
           <div className="flex flex-col gap-4 animate-in fade-in duration-200">
@@ -419,7 +538,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
 
             {/* Realtime Rooms Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {realtimeRooms.map((room) => (
+              {filteredRooms.map((room) => (
                 <div
                   key={room.id}
                   className="bg-slate-900 border border-slate-800 hover:border-amber-500/50 rounded-2xl p-4 md:p-5 flex flex-col justify-between gap-4 shadow-md transition-all hover:shadow-xl hover:-translate-y-0.5 group"
@@ -463,7 +582,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                     </div>
 
                     <button
-                      onClick={() => onEnterRoom(room)}
+                      onClick={() => handleEnterRealtimeRoom(room)}
                       className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-colors shadow-md group-hover:scale-105"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
@@ -494,7 +613,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
 
             {/* Scheduled Rooms Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {scheduledRooms.map((room) => {
+              {filteredRooms.map((room) => {
                 const isUserBooked = room.bookedPlayers?.some(p => p.name === currentUser.nickname);
                 return (
                   <div
@@ -599,7 +718,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
               </h3>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
               >
                 ✕
               </button>

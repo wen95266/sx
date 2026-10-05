@@ -62,6 +62,16 @@ export function sortCards(cards: Card[]): Card[] {
   });
 }
 
+export function sortCardsBySuit(cards: Card[]): Card[] {
+  const suitOrder: Record<Suit, number> = { spades: 4, hearts: 3, clubs: 2, diamonds: 1 };
+  return [...cards].sort((a, b) => {
+    if (suitOrder[b.suit] !== suitOrder[a.suit]) {
+      return suitOrder[b.suit] - suitOrder[a.suit];
+    }
+    return b.rank - a.rank;
+  });
+}
+
 // Evaluate a 3-card (Head) or 5-card (Mid/Tail) Dun
 export function evaluateDun(cards: Card[], isHead: boolean): DunEvaluation {
   if (!cards || (isHead && cards.length !== 3) || (!isHead && cards.length !== 5)) {

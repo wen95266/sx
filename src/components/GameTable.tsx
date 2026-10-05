@@ -15,6 +15,7 @@ import {
   createDeck,
   shuffleDeck,
   sortCards,
+  sortCardsBySuit,
   evaluateDun,
   validateDaoPai,
   compareDuns,
@@ -27,11 +28,18 @@ import {
   getStoredUser,
   recordGameResult,
   UserProfile,
+  addChips,
   saveMatchSession,
   getMatchSession,
   clearMatchSession,
-  ActiveMatchSession
+  ActiveMatchSession,
+  saveMatchHistoryRecord,
+  MatchHistoryRecord,
+  ReplayPlayerDun
 } from '../utils/authStorage';
+import { triggerHaptic } from '../utils/haptics';
+import { PointsManagementModal } from './PointsManagementModal';
+import { MatchHistoryModal } from './MatchHistoryModal';
 import {
   ArrowLeft,
   Flame,
@@ -56,10 +64,9 @@ import {
   Crown,
   ShieldAlert,
   ChevronRight,
-  Check
+  Check,
+  History
 } from 'lucide-react';
-
-import { PointsManagementModal } from './PointsManagementModal';
 
 interface GameTableProps {
   currentRoom?: LobbyRoom;
@@ -93,6 +100,9 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [currentUser, setCurrentUser] = useState<UserProfile>(getStoredUser());
   const [roundNumber, setRoundNumber] = useState(28);
   const [showPointsModal, setShowPointsModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [sortBySuit, setSortBySuit] = useState(false);
+  const [showBankruptcyBonus, setShowBankruptcyBonus] = useState(false);
 
   // Game Phases: ARRANGING -> SHOWDOWN_HEAD -> SHOWDOWN_MID -> SHOWDOWN_TAIL -> ROUND_RESULT
   const [phase, setPhase] = useState<GamePhase>('ARRANGING');
@@ -374,6 +384,32 @@ export const GameTable: React.FC<GameTableProps> = ({
     setArrangeError(null);
   }, [smartOptions, currentOptionIndex, soundEnabled]);
 
+  // Toggle sort between Rank and Suit for all cards
+  const handleToggleCardSort = () => {
+    if (phase !== 'ARRANGING') return;
+    if (soundEnabled) SoundEffects.playCardClick();
+    const nextSortBySuit = !sortBySuit;
+    setSortBySuit(nextSortBySuit);
+    const sorter = nextSortBySuit ? sortCardsBySuit : sortCards;
+    setHeadCards((prev) => sorter(prev));
+    setMidCards((prev) => sorter(prev));
+    setTailCards((prev) => sorter(prev));
+  };
+
+  // Reset to initial best smart hand
+  const handleResetToBestHand = () => {
+    if (phase !== 'ARRANGING') return;
+    if (smartOptions.length === 0) return;
+    if (soundEnabled) SoundEffects.playDealCard();
+    setCurrentOptionIndex(0);
+    const opt = smartOptions[0];
+    setHeadCards(opt.head);
+    setMidCards(opt.middle);
+    setTailCards(opt.tail);
+    setSelectedCardIds([]);
+    setArrangeError(null);
+  };
+
   // Execute actual submission and begin showdown sequence
   const executeSubmitShowdown = useCallback(
     (hCards: Card[], mCards: Card[], tCards: Card[], isDaoPai = false, daoReason?: string) => {
@@ -447,6 +483,60 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             const updatedUser = recordGameResult(myDelta, myDelta > 0, 0, false, false);
             setCurrentUser(updatedUser);
+            if (onUpdateUser) onUpdateUser(updatedUser);
+
+            // Persist match history record for 战绩复盘
+            try {
+              const hist: MatchHistoryRecord = {
+                id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                roundNumber,
+                roomName: currentRoom?.name || (is8Players ? '八人对战场' : '四人对战场'),
+                timestamp: Date.now(),
+                myScoreDelta: myDelta,
+                hasGunShot: Boolean(hasGunShot),
+                isGrandSlam: Boolean(hasSlam),
+                players: participants.map((p) => {
+                  const hEval = evaluateDun(p.arrangement.head, true);
+                  const mEval = evaluateDun(p.arrangement.middle, false);
+                  const tEval = evaluateDun(p.arrangement.tail, false);
+                  return {
+                    playerId: p.id,
+                    name: p.name,
+                    avatar: p.avatar,
+                    isMe: p.id === 'player_me',
+                    head: p.arrangement.head,
+                    middle: p.arrangement.middle,
+                    tail: p.arrangement.tail,
+                    headTypeName: hEval.typeName,
+                    midTypeName: mEval.typeName,
+                    tailTypeName: tEval.typeName,
+                    score: result.scores[p.id] || 0,
+                    isDaoPai: p.arrangement.isDaoPai || false
+                  };
+                }),
+                gunShots: result.gunShots?.map((g) => {
+                  const s = participants.find((p) => p.id === g.shooterId);
+                  const t = participants.find((p) => p.id === g.targetId);
+                  return {
+                    shooterName: s?.name || '未知',
+                    targetName: t?.name || '未知'
+                  };
+                }),
+                grandSlamPlayerName: hasSlam
+                  ? participants.find((p) => p.id === result.grandSlamPlayerId)?.name
+                  : undefined
+              };
+              saveMatchHistoryRecord(hist);
+            } catch (err) {
+              console.error('Failed to save match history record', err);
+            }
+
+            // Check bankruptcy relief bonus
+            if (updatedUser.chips < 100) {
+              setTimeout(() => {
+                setShowBankruptcyBonus(true);
+              }, 1200);
+            }
 
             if (myDelta > 0) {
               confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
@@ -458,7 +548,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         }, 2600);
       }, 2600);
     },
-    [players, activePlayerCount, soundEnabled]
+    [players, activePlayerCount, soundEnabled, roundNumber, currentRoom, is8Players, onUpdateUser]
   );
 
   // Fast forward directly to final settlement
@@ -468,6 +558,58 @@ export const GameTable: React.FC<GameTableProps> = ({
     setSettlement(result);
     setPhase('ROUND_RESULT');
     if (soundEnabled) SoundEffects.playShowdownDing(true);
+
+    const myDelta = result.scores['player_me'] || 0;
+    const hasGunShot = result.gunShots && result.gunShots.length > 0;
+    const hasSlam = Boolean(result.grandSlamPlayerId);
+    const updatedUser = recordGameResult(myDelta, myDelta > 0, 0, false, false);
+    setCurrentUser(updatedUser);
+    if (onUpdateUser) onUpdateUser(updatedUser);
+
+    try {
+      const hist: MatchHistoryRecord = {
+        id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        roundNumber,
+        roomName: currentRoom?.name || (is8Players ? '八人对战场' : '四人对战场'),
+        timestamp: Date.now(),
+        myScoreDelta: myDelta,
+        hasGunShot: Boolean(hasGunShot),
+        isGrandSlam: Boolean(hasSlam),
+        players: participants.map((p) => {
+          const hEval = evaluateDun(p.arrangement.head, true);
+          const mEval = evaluateDun(p.arrangement.middle, false);
+          const tEval = evaluateDun(p.arrangement.tail, false);
+          return {
+            playerId: p.id,
+            name: p.name,
+            avatar: p.avatar,
+            isMe: p.id === 'player_me',
+            head: p.arrangement.head,
+            middle: p.arrangement.middle,
+            tail: p.arrangement.tail,
+            headTypeName: hEval.typeName,
+            midTypeName: mEval.typeName,
+            tailTypeName: tEval.typeName,
+            score: result.scores[p.id] || 0,
+            isDaoPai: p.arrangement.isDaoPai || false
+          };
+        }),
+        gunShots: result.gunShots?.map((g) => {
+          const s = participants.find((p) => p.id === g.shooterId);
+          const t = participants.find((p) => p.id === g.targetId);
+          return {
+            shooterName: s?.name || '未知',
+            targetName: t?.name || '未知'
+          };
+        }),
+        grandSlamPlayerName: hasSlam
+          ? participants.find((p) => p.id === result.grandSlamPlayerId)?.name
+          : undefined
+      };
+      saveMatchHistoryRecord(hist);
+    } catch (err) {
+      console.error('Failed to save match history record', err);
+    }
   };
 
   // Submit Hand: Checks strictly 3, 5, 5 card counts only upon submission
@@ -905,8 +1047,18 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         </div>
 
-        {/* Right: Player Count Badge (e.g. 8/8 或 4/4) + Gold Chips + Chat Button */}
-        <div className="flex items-center gap-2">
+        {/* Right: History + Player Count Badge + Gold Chips + Chat Button */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* History / 战绩复盘 */}
+          <button
+            onClick={() => setShowHistoryModal(true)}
+            className="px-2 py-0.5 bg-slate-800/90 hover:bg-slate-700 border border-slate-700 hover:border-amber-400 text-slate-200 text-xs font-bold rounded-full flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95"
+            title="查看近期对局战绩与亮牌复盘"
+          >
+            <History className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">战绩</span>
+          </button>
+
           {/* Player Count Badge */}
           <div
             onClick={() => setShowPlayersModal(true)}
@@ -1656,6 +1808,57 @@ export const GameTable: React.FC<GameTableProps> = ({
         )}
       </main>
 
+      {/* 3.5. QUICK ARRANGE HELPER BAR (Reset, Sort Toggle, Live DaoPai Warning) */}
+      {!isShowdownPhase && (
+        <div className="w-full max-w-lg mx-auto px-2 py-0.5 flex items-center justify-between gap-1 text-[11px] z-30 shrink-0">
+          <div className="flex items-center gap-1.5">
+            {/* 一键复位 */}
+            <button
+              type="button"
+              onClick={handleResetToBestHand}
+              className="px-2 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 text-slate-300 hover:text-white rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95"
+              title="一键恢复推荐的最佳顺牌组合"
+            >
+              <RotateCcw className="w-3 h-3 text-amber-400" />
+              <span>一键复位</span>
+            </button>
+
+            {/* 点数/花色排序 */}
+            <button
+              type="button"
+              onClick={handleToggleCardSort}
+              className="px-2 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 text-slate-300 hover:text-white rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95"
+              title={sortBySuit ? '当前按花色排列，点击按点数大小排列' : '当前按点数大小排列，点击按花色排列'}
+            >
+              <span className="font-bold text-amber-400">⇅</span>
+              <span>{sortBySuit ? '花色序' : '点数序'}</span>
+            </button>
+          </div>
+
+          {/* Live DaoPai / Valid Indicator */}
+          {headCards.length === 3 && midCards.length === 5 && tailCards.length === 5 ? (
+            (() => {
+              const daoCheck = validateDaoPai(headCards, midCards, tailCards);
+              return daoCheck.isDaoPai ? (
+                <div className="flex items-center gap-1 text-rose-300 font-bold px-2 py-0.5 bg-rose-950/90 border border-rose-500/80 rounded-lg animate-pulse truncate max-w-[210px] shadow-xs">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <span className="truncate">⚠️ 倒水警示</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-emerald-300 font-bold px-2 py-0.5 bg-emerald-950/90 border border-emerald-500/80 rounded-lg truncate shadow-xs">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>牌型合规 (无倒水)</span>
+                </div>
+              );
+            })()
+          ) : (
+            <div className="text-slate-400 font-mono text-[10px] bg-slate-900/80 px-2 py-0.5 rounded-lg border border-slate-800">
+              已放置: <span className="text-amber-400 font-bold">{headCards.length + midCards.length + tailCards.length}</span>/13张
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 4. CLEAN BOTTOM ACTIONS (DUAL BUTTONS + AUTO HOSTING TOGGLE) */}
       {!isShowdownPhase && (
         <footer className="w-full max-w-lg mx-auto p-2 bg-[#0F172A] border-t border-slate-800/80 flex items-center gap-2 z-30 shrink-0 shadow-lg">
@@ -1998,6 +2201,45 @@ export const GameTable: React.FC<GameTableProps> = ({
           if (onUpdateUser) onUpdateUser(updated);
         }}
       />
+
+      {/* 9. MATCH HISTORY & FULL REPLAY MODAL */}
+      <MatchHistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+      />
+
+      {/* 10. BANKRUPTCY BONUS MODAL */}
+      {showBankruptcyBonus && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setShowBankruptcyBonus(false)}
+        >
+          <div
+            className="bg-[#0F172A] border-2 border-amber-400/90 rounded-3xl max-w-xs w-full p-5 shadow-2xl flex flex-col items-center gap-3 text-center animate-in zoom-in-95 text-slate-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-2xl shadow-lg shadow-amber-500/30">
+              🎁
+            </div>
+            <h4 className="font-extrabold text-base text-white">破产补助水数到账！</h4>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              您的积分水数偏低，组委会为您发放了 <strong className="text-amber-400 font-mono">+1,000</strong> 竞技鼓励水数，祝您下局大展神威！
+            </p>
+            <button
+              onClick={() => {
+                const updated = addChips(1000);
+                setCurrentUser(updated);
+                if (onUpdateUser) onUpdateUser(updated);
+                setShowBankruptcyBonus(false);
+                SoundEffects.playFanfare();
+              }}
+              className="w-full py-2.5 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-extrabold text-sm rounded-xl shadow-md cursor-pointer active:scale-95"
+            >
+              🎉 开心收下 (+1,000 水)
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

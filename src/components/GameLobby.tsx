@@ -19,12 +19,17 @@ import {
   Users,
   LogOut,
   Trophy,
-  Sparkles
+  Sparkles,
+  History,
+  PlusCircle
 } from 'lucide-react';
 import { LobbyRoom } from '../types/game';
 import { UserProfile, addChips, logoutUser } from '../utils/authStorage';
 import { SoundEffects } from '../utils/audio';
 import { PointsManagementModal } from './PointsManagementModal';
+import { PWAInstallButton } from './PWAInstallButton';
+import { PrivateRoomModal } from './PrivateRoomModal';
+import { MatchHistoryModal } from './MatchHistoryModal';
 
 interface GameLobbyProps {
   currentUser: UserProfile;
@@ -126,6 +131,8 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'realtime' | 'scheduled'>('realtime');
   const [showChipsModal, setShowChipsModal] = useState(false);
+  const [showPrivateRoomModal, setShowPrivateRoomModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [toastTip, setToastTip] = useState<string | null>(null);
 
   const handleClaimBonus = (amount = 1000) => {
@@ -223,19 +230,49 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
             </div>
           </div>
 
-          {/* 右上角：积分管理 (Points Management) */}
-          <div className="flex items-center gap-2">
+          {/* 右上角：PWA安装 + 战绩复盘 + 自建私密房 + 积分管理 */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* PWA 桌面安装按钮 */}
+            <PWAInstallButton />
+
+            {/* 战绩复盘按钮 */}
+            <button
+              onClick={() => setShowHistoryModal(true)}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white rounded-xl flex items-center gap-1 cursor-pointer transition-all shadow-xs text-xs font-bold shrink-0"
+              title="查看战绩历史与牌局全景复盘"
+            >
+              <History className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">战绩复盘</span>
+            </button>
+
+            {/* 自建私密房按钮 */}
+            <button
+              onClick={() => {
+                if (!currentUser.isLoggedIn) {
+                  onOpenAuth();
+                  return;
+                }
+                setShowPrivateRoomModal(true);
+              }}
+              className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/50 text-amber-300 font-bold rounded-xl flex items-center gap-1 cursor-pointer transition-all shadow-xs text-xs shrink-0 active:scale-95"
+              title="自建好友私密房或输入房号加入"
+            >
+              <PlusCircle className="w-3.5 h-3.5 text-amber-400" />
+              <span>自建私密房</span>
+            </button>
+
+            {/* 积分管理 */}
             <button
               onClick={() => setShowChipsModal(true)}
-              className="px-3 py-1.5 bg-slate-950/90 hover:bg-slate-800 border border-amber-500/40 hover:border-amber-400 rounded-xl flex items-center gap-2 cursor-pointer transition-all shadow-md group shrink-0"
-              title="点击查看积分管理与明细"
+              className="px-2.5 sm:px-3 py-1.5 bg-slate-950/90 hover:bg-slate-800 border border-amber-500/40 hover:border-amber-400 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-md group shrink-0"
+              title="点击查看积分管理、搜索手机号赠送积分"
             >
-              <div className="w-6 h-6 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
-                <Coins className="w-3.5 h-3.5" />
+              <div className="w-5 h-5 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
+                <Coins className="w-3 h-3" />
               </div>
               <div className="text-left">
-                <div className="text-[9px] text-amber-300 font-medium leading-none">积分管理</div>
-                <div className="text-xs sm:text-sm font-bold text-amber-400 font-mono mt-0.5 leading-none">
+                <div className="text-[8px] sm:text-[9px] text-amber-300 font-medium leading-none">积分管理</div>
+                <div className="text-[11px] sm:text-xs font-bold text-amber-400 font-mono mt-0.5 leading-none">
                   {currentUser.chips.toLocaleString()} 水
                 </div>
               </div>
@@ -497,6 +534,19 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
         onUserChange={(updated) => {
           if (onUpdateUser) onUpdateUser(updated);
         }}
+      />
+
+      {/* 好友私密房与邀请码弹窗 */}
+      <PrivateRoomModal
+        isOpen={showPrivateRoomModal}
+        onClose={() => setShowPrivateRoomModal(false)}
+        onEnterRoom={handleSelectRoom}
+      />
+
+      {/* 战绩历史与全景复盘弹窗 */}
+      <MatchHistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
       />
     </div>
   );

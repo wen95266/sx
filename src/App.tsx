@@ -25,6 +25,35 @@ export default function App() {
     existingSession?.room || null
   );
 
+  // Auto-detect private room parameter from URL (?room=6688)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room');
+      if (roomParam && /^\d{4}$/.test(roomParam)) {
+        const privateRoom: LobbyRoom = {
+          id: `private_${roomParam}`,
+          name: `🔐 好友私密房 #${roomParam}`,
+          type: 'realtime',
+          baseScore: 50,
+          minChips: 250,
+          playersCount: 1,
+          maxPlayers: 4,
+          deckCount: 1,
+          creatorName: '邀请好友',
+          status: 'waiting',
+          allowChat: true,
+          tag: `私密房 · 房号${roomParam}`,
+          description: `通过好友专属分享链接直接加入的私密房间 #${roomParam}。`
+        };
+        setSelectedRoom(privateRoom);
+        if (getStoredUser().isLoggedIn) {
+          setGameViewMode('table');
+        }
+      }
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none">
       {gameViewMode === 'lobby' ? (

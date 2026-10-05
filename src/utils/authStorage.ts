@@ -622,3 +622,62 @@ export function transferChips(
     toUser
   };
 }
+
+// --- 牌局战绩历史与全景复盘记录 (Match History & Replay) ---
+
+const STORAGE_KEY_MATCH_HISTORY = 'shisanshui_match_history';
+
+export interface ReplayPlayerDun {
+  playerId: string;
+  name: string;
+  avatar: string;
+  isMe: boolean;
+  head: Card[];
+  middle: Card[];
+  tail: Card[];
+  headTypeName: string;
+  midTypeName: string;
+  tailTypeName: string;
+  score: number;
+  isDaoPai: boolean;
+}
+
+export interface MatchHistoryRecord {
+  id: string;
+  roundNumber: number;
+  roomName: string;
+  timestamp: number;
+  myScoreDelta: number;
+  hasGunShot: boolean;
+  isGrandSlam: boolean;
+  players: ReplayPlayerDun[];
+  gunShots?: { shooterName: string; targetName: string }[];
+  grandSlamPlayerName?: string;
+  maPaiLabel?: string;
+  maPaiWinnerName?: string;
+}
+
+export function getMatchHistoryList(): MatchHistoryRecord[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_MATCH_HISTORY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error('Failed to read match history', e);
+  }
+  return [];
+}
+
+export function saveMatchHistoryRecord(record: MatchHistoryRecord): void {
+  try {
+    const list = getMatchHistoryList();
+    list.unshift(record);
+    // Keep last 25 rounds
+    localStorage.setItem(STORAGE_KEY_MATCH_HISTORY, JSON.stringify(list.slice(0, 25)));
+  } catch (e) {
+    console.error('Failed to save match history record', e);
+  }
+}
+

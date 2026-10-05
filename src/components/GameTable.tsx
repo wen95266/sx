@@ -7,7 +7,6 @@ import {
   AutoArrangeOption,
   DunEvaluation,
   SettlementSummary,
-  ChatMessage,
   EmojiReaction,
   SpeechBubble,
   LobbyRoom
@@ -35,13 +34,15 @@ import {
   MessageCircle,
   Mic,
   Volume2,
+  VolumeX,
   Send,
   Sparkles,
   CheckCircle2,
   X,
   RotateCcw,
   Trophy,
-  Smile
+  Smile,
+  Zap
 } from 'lucide-react';
 
 interface GameTableProps {
@@ -498,27 +499,27 @@ export const GameTable: React.FC<GameTableProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#0B1120] text-slate-100 flex flex-col font-sans select-none relative overflow-x-hidden">
+    <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#0B1120] text-slate-100 flex flex-col font-sans select-none relative overflow-hidden">
       {/* 1. TOP HEADER BAR */}
-      <header className="px-3.5 py-2.5 bg-[#0F172A] border-b border-slate-800/80 flex items-center justify-between z-30 shadow-md">
+      <header className="px-3.5 py-2 bg-[#0F172A] border-b border-slate-800/80 flex items-center justify-between z-30 shadow-md shrink-0">
         {/* Left: Back Arrow + Flame Icon + Title */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             onClick={onBackToLobby}
-            className="w-9 h-9 rounded-full bg-slate-800/90 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer shadow-xs active:scale-95"
+            className="w-8 h-8 rounded-full bg-slate-800/90 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer shadow-xs active:scale-95"
             title="返回游戏大厅"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
 
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-slate-950 shadow-md shadow-amber-500/20">
-            <Flame className="w-4 h-4 fill-current" />
+          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-slate-950 shadow-md shadow-amber-500/20">
+            <Flame className="w-3.5 h-3.5 fill-current" />
           </div>
 
-          <div className="text-sm font-bold text-white flex items-center gap-1.5">
+          <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
             <span>实时对战场</span>
             <span className="text-slate-500">·</span>
-            <span className="text-xs text-slate-300">
+            <span className="text-[11px] sm:text-xs text-slate-300">
               第 <strong className="text-amber-400 font-mono">{roundNumber}</strong> 局
             </span>
           </div>
@@ -527,16 +528,16 @@ export const GameTable: React.FC<GameTableProps> = ({
         {/* Right: Chip Count Pill + Chat Button */}
         <div className="flex items-center gap-2">
           {/* Gold Chip Pill */}
-          <div className="px-3 py-1 bg-slate-950 border border-amber-500/40 rounded-full flex items-center gap-1.5 text-xs text-amber-400 font-mono font-bold shadow-xs">
+          <div className="px-2.5 py-1 bg-slate-950 border border-amber-500/40 rounded-full flex items-center gap-1.5 text-xs text-amber-400 font-mono font-bold shadow-xs">
             <Coins className="w-3.5 h-3.5" />
             <span>{currentUser.chips.toLocaleString()}</span>
           </div>
 
-          {/* Purple Chat Button */}
+          {/* Purple Chat Button (Opens integrated chat drawer) */}
           <button
             onClick={() => setShowChatDrawer(true)}
             className="w-8 h-8 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center cursor-pointer transition-colors shadow-md active:scale-95"
-            title="局内聊天"
+            title="快捷短语、语音与表情"
           >
             <MessageCircle className="w-4 h-4" />
           </button>
@@ -544,7 +545,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       </header>
 
       {/* 2. HORIZONTAL 8 PLAYER SEATS RIBBON */}
-      <div className="px-3 py-2 bg-[#090E1A] border-b border-slate-800/60 overflow-x-auto scrollbar-none flex items-center gap-2 z-20">
+      <div className="px-2.5 py-1.5 bg-[#090E1A] border-b border-slate-800/60 overflow-x-auto scrollbar-none flex items-center gap-1.5 z-20 shrink-0">
         {players.map((seat) => {
           const isSelected = activeSeatId === seat.id;
           const isMe = seat.id === 'player_me';
@@ -553,15 +554,15 @@ export const GameTable: React.FC<GameTableProps> = ({
             <button
               key={seat.id}
               onClick={() => setActiveSeatId(seat.id)}
-              className={`flex flex-col items-center justify-center min-w-[58px] py-1.5 px-2 rounded-xl border transition-all cursor-pointer ${
+              className={`flex flex-col items-center justify-center min-w-[52px] py-1 px-1.5 rounded-xl border transition-all cursor-pointer ${
                 isSelected
                   ? 'bg-amber-500/20 border-amber-400 shadow-md shadow-amber-500/20'
                   : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 text-slate-400'
               }`}
             >
-              <div className="text-lg leading-tight mb-0.5">{seat.avatar}</div>
+              <div className="text-base leading-tight mb-0.5">{seat.avatar}</div>
               <div
-                className={`text-[11px] font-medium truncate max-w-[50px] ${
+                className={`text-[10px] font-medium truncate max-w-[46px] ${
                   isSelected ? 'text-amber-300 font-bold' : isMe ? 'text-slate-200' : 'text-slate-400'
                 }`}
               >
@@ -572,13 +573,13 @@ export const GameTable: React.FC<GameTableProps> = ({
         })}
       </div>
 
-      {/* 3. MAIN TABLE BODY: THREE STACKED DUN SECTIONS (前墩 / 中墩 / 后墩) */}
-      <main className="flex-1 max-w-lg mx-auto w-full p-3 flex flex-col justify-between gap-2.5 overflow-y-auto pb-28">
+      {/* 3. MAIN TABLE BODY: THREE COMPACT STACKED DUN SECTIONS (前墩 / 中墩 / 后墩) */}
+      <main className="flex-1 max-w-lg mx-auto w-full px-2.5 py-1.5 flex flex-col justify-between gap-1.5 overflow-hidden">
         {/* Floating Speech Bubbles & Emojis */}
         {speechBubbles.map((b) => (
           <div
             key={b.id}
-            className="p-2 bg-indigo-900/90 text-white border border-indigo-500 rounded-xl text-xs font-bold shadow-xl animate-in fade-in flex items-center gap-2 my-1"
+            className="p-1.5 bg-indigo-900/90 text-white border border-indigo-500 rounded-xl text-xs font-bold shadow-xl animate-in fade-in flex items-center gap-2"
           >
             <span>💬</span>
             <span>{b.text}</span>
@@ -586,30 +587,30 @@ export const GameTable: React.FC<GameTableProps> = ({
         ))}
 
         {/* SECTION 1: 前墩 (Head Dun 3/3) */}
-        <div className="bg-[#0F172A]/90 border border-slate-800/90 rounded-2xl p-3 shadow-lg flex flex-col gap-2">
+        <div className="bg-[#0F172A]/90 border border-slate-800/90 rounded-xl p-2 sm:p-2.5 shadow-md flex flex-col justify-between flex-1 max-h-[29vh]">
           {/* Section Header */}
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between text-xs shrink-0 mb-1">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-sky-400" />
-              <span className="font-bold text-slate-200">前墩</span>
+              <span className="font-bold text-slate-200 text-xs">前墩</span>
               <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 text-[10px] font-mono font-bold">
                 {headCards.length}/3
               </span>
             </div>
-            <div className="text-sky-400 text-xs font-bold font-mono truncate max-w-[240px]">
+            <div className="text-sky-400 text-xs font-bold font-mono truncate max-w-[230px]">
               {getDunLabel(headEval, headCards, true)}
             </div>
           </div>
 
           {/* Playing Cards Row (Overlapping Layout) */}
-          <div className="flex items-center justify-start pl-1 py-1">
+          <div className="flex items-center justify-start pl-1 flex-1">
             <div className="flex -space-x-8 sm:-space-x-6">
               {headCards.map((card) => (
                 <div
                   key={card.id}
-                  className="transition-transform hover:-translate-y-2 duration-150 drop-shadow-md"
+                  className="transition-transform hover:-translate-y-1.5 duration-150 drop-shadow-md"
                 >
-                  <CardItem card={card} size="lg" />
+                  <CardItem card={card} size="md" />
                 </div>
               ))}
             </div>
@@ -617,30 +618,30 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
 
         {/* SECTION 2: 中墩 (Middle Dun 5/5) */}
-        <div className="bg-[#0F172A]/90 border border-slate-800/90 rounded-2xl p-3 shadow-lg flex flex-col gap-2">
+        <div className="bg-[#0F172A]/90 border border-slate-800/90 rounded-xl p-2 sm:p-2.5 shadow-md flex flex-col justify-between flex-1 max-h-[29vh]">
           {/* Section Header */}
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between text-xs shrink-0 mb-1">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-sky-400" />
-              <span className="font-bold text-slate-200">中墩</span>
+              <span className="font-bold text-slate-200 text-xs">中墩</span>
               <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 text-[10px] font-mono font-bold">
                 {midCards.length}/5
               </span>
             </div>
-            <div className="text-sky-400 text-xs font-bold font-mono truncate max-w-[240px]">
+            <div className="text-sky-400 text-xs font-bold font-mono truncate max-w-[230px]">
               {getDunLabel(midEval, midCards, false)}
             </div>
           </div>
 
           {/* Playing Cards Row (Overlapping Layout) */}
-          <div className="flex items-center justify-start pl-1 py-1">
+          <div className="flex items-center justify-start pl-1 flex-1">
             <div className="flex -space-x-9 sm:-space-x-7">
               {midCards.map((card) => (
                 <div
                   key={card.id}
-                  className="transition-transform hover:-translate-y-2 duration-150 drop-shadow-md"
+                  className="transition-transform hover:-translate-y-1.5 duration-150 drop-shadow-md"
                 >
-                  <CardItem card={card} size="lg" />
+                  <CardItem card={card} size="md" />
                 </div>
               ))}
             </div>
@@ -648,30 +649,30 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
 
         {/* SECTION 3: 后墩 (Tail Dun 5/5) */}
-        <div className="bg-[#0F172A]/90 border border-slate-800/90 rounded-2xl p-3 shadow-lg flex flex-col gap-2">
+        <div className="bg-[#0F172A]/90 border border-slate-800/90 rounded-xl p-2 sm:p-2.5 shadow-md flex flex-col justify-between flex-1 max-h-[29vh]">
           {/* Section Header */}
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between text-xs shrink-0 mb-1">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-purple-400" />
-              <span className="font-bold text-slate-200">后墩</span>
+              <span className="font-bold text-slate-200 text-xs">后墩</span>
               <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 text-[10px] font-mono font-bold">
                 {tailCards.length}/5
               </span>
             </div>
-            <div className="text-purple-400 text-xs font-bold font-mono truncate max-w-[240px]">
+            <div className="text-purple-400 text-xs font-bold font-mono truncate max-w-[230px]">
               {getDunLabel(tailEval, tailCards, false)}
             </div>
           </div>
 
           {/* Playing Cards Row (Overlapping Layout) */}
-          <div className="flex items-center justify-start pl-1 py-1">
+          <div className="flex items-center justify-start pl-1 flex-1">
             <div className="flex -space-x-9 sm:-space-x-7">
               {tailCards.map((card) => (
                 <div
                   key={card.id}
-                  className="transition-transform hover:-translate-y-2 duration-150 drop-shadow-md"
+                  className="transition-transform hover:-translate-y-1.5 duration-150 drop-shadow-md"
                 >
-                  <CardItem card={card} size="lg" />
+                  <CardItem card={card} size="md" />
                 </div>
               ))}
             </div>
@@ -680,7 +681,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
         {/* Settlement Showdown Results Overlay (if finished) */}
         {phase === 'ROUND_RESULT' && settlement && (
-          <div className="p-4 bg-slate-900/95 border-2 border-amber-500/60 rounded-2xl shadow-2xl space-y-3 animate-in zoom-in-95">
+          <div className="absolute inset-x-3 top-16 z-50 p-4 bg-slate-900/95 border-2 border-amber-500/70 rounded-2xl shadow-2xl space-y-3 animate-in zoom-in-95 backdrop-blur-sm">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <div className="flex items-center gap-2">
                 <Trophy className="w-5 h-5 text-amber-400" />
@@ -722,136 +723,134 @@ export const GameTable: React.FC<GameTableProps> = ({
         )}
       </main>
 
-      {/* 4. FIXED BOTTOM SECTION: CHAT INPUT + ACTION BUTTONS */}
-      <footer className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto p-3 bg-[#0B1120]/95 backdrop-blur-md border-t border-slate-800/80 flex flex-col gap-2.5 z-40">
-        {/* Row 1: Chat Input Row */}
-        <div className="flex items-center gap-2 relative">
-          {/* Mic Button */}
-          <button
-            onClick={() => handleSendMessage('【语音消息 🎙️ 0:02】')}
-            className="w-8 h-8 rounded-full bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 flex items-center justify-center cursor-pointer transition-colors shrink-0"
-            title="语音输入"
-          >
-            <Mic className="w-3.5 h-3.5" />
-          </button>
+      {/* 4. CLEAN BOTTOM ACTIONS (ONLY DUAL BUTTONS, NO INPUT BAR / NO FLOATING BUBBLE) */}
+      <footer className="w-full max-w-lg mx-auto p-2.5 bg-[#0F172A] border-t border-slate-800/80 flex items-center gap-2.5 z-30 shrink-0 shadow-lg">
+        {/* Button 1: 变换牌型 (Cycle combinations) */}
+        <button
+          onClick={handleCycleSmartHand}
+          disabled={phase !== 'ARRANGING'}
+          className="flex-1 py-3 px-3 bg-[#0B1120] hover:bg-slate-800 border border-amber-500/50 hover:border-amber-400 text-amber-400 font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95 disabled:opacity-50"
+        >
+          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+          <span>变换牌型</span>
+        </button>
 
-          {/* Speaker Sound Toggle */}
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`w-8 h-8 rounded-full border flex items-center justify-center cursor-pointer transition-colors shrink-0 ${
-              soundEnabled
-                ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                : 'bg-slate-800 border-slate-700 text-slate-500'
-            }`}
-            title="音效开关"
-          >
-            <Volume2 className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Rounded Chat Text Input */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="flex-1 flex items-center gap-1"
-          >
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="输入聊天内容..."
-              className="w-full bg-[#0F172A] border border-slate-700/80 rounded-full px-4 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
-            />
-            <button
-              type="submit"
-              className="w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center cursor-pointer shrink-0 transition-colors"
-            >
-              <Send className="w-3.5 h-3.5" />
-            </button>
-          </form>
-
-          {/* Floating Chat Trigger Button */}
-          <button
-            onClick={() => setShowChatDrawer(true)}
-            className="absolute -top-14 right-2 w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-xl flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-all"
-            title="快捷短语与表情"
-          >
-            <MessageCircle className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Row 2: Dual Action Buttons (变换牌型 + 提交牌型) */}
-        <div className="flex items-center gap-3">
-          {/* Button 1: 变换牌型 (Cycle combinations) */}
-          <button
-            onClick={handleCycleSmartHand}
-            disabled={phase !== 'ARRANGING'}
-            className="flex-1 py-3 px-4 bg-[#0F172A] hover:bg-slate-800 border border-amber-500/50 hover:border-amber-400 text-amber-400 font-bold text-xs md:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95 disabled:opacity-50"
-          >
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>变换牌型</span>
-          </button>
-
-          {/* Button 2: 提交牌型 (13/13) */}
-          <button
-            onClick={handleSubmitHand}
-            disabled={phase !== 'ARRANGING'}
-            className="flex-1 py-3 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-xs md:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>提交牌型 (13/13)</span>
-          </button>
-        </div>
+        {/* Button 2: 提交牌型 (13/13) */}
+        <button
+          onClick={handleSubmitHand}
+          disabled={phase !== 'ARRANGING'}
+          className="flex-1 py-3 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50"
+        >
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>提交牌型 (13/13)</span>
+        </button>
       </footer>
 
-      {/* 5. CHAT DRAWER & EMOJI QUICK PICKER MODAL */}
+      {/* 5. ALL-IN-ONE INTERACTIVE CHAT & QUICK PHRASES DRAWER */}
       {showChatDrawer && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-end justify-center p-3 animate-in fade-in">
-          <div className="bg-[#0F172A] border border-slate-700 rounded-3xl max-w-lg w-full p-4 shadow-2xl flex flex-col gap-3 max-h-[70vh]">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="font-bold text-xs text-white flex items-center gap-1.5">
-                <Smile className="w-4 h-4 text-amber-400" />
-                <span>快捷短语与表情挑衅</span>
-              </span>
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 animate-in fade-in">
+          <div className="bg-[#0F172A] border border-slate-700 rounded-3xl max-w-md w-full p-4 shadow-2xl flex flex-col gap-3 max-h-[85vh] animate-in slide-in-from-bottom-6">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div className="flex items-center gap-2">
+                <Smile className="w-5 h-5 text-amber-400" />
+                <span className="font-bold text-sm text-white">局内互动 & 快捷聊天</span>
+              </div>
               <button
                 onClick={() => setShowChatDrawer(false)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Emoji Bar */}
-            <div className="flex items-center justify-between gap-1 p-2 bg-slate-950 rounded-2xl">
-              {EMOJI_OPTIONS.map((em) => (
-                <button
-                  key={em}
-                  onClick={() => {
-                    handleSendEmoji(em);
-                    setShowChatDrawer(false);
-                  }}
-                  className="text-2xl hover:scale-125 transition-transform p-1 cursor-pointer"
-                >
-                  {em}
-                </button>
-              ))}
+            {/* Controls Row: Voice Message & Sound Effect Toggle */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  handleSendMessage('【语音消息 🎙️ 0:02】');
+                  setShowChatDrawer(false);
+                }}
+                className="py-2 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 font-medium text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Mic className="w-3.5 h-3.5" />
+                <span>发送语音 🎙️</span>
+              </button>
+
+              <button
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className={`py-2 px-3 border font-medium text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+                  soundEnabled
+                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                    : 'bg-slate-800 border-slate-700 text-slate-400'
+                }`}
+              >
+                {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                <span>音效: {soundEnabled ? '已开启' : '已静音'}</span>
+              </button>
             </div>
 
-            {/* Quick Phrases */}
-            <div className="space-y-1.5 overflow-y-auto max-h-48 text-xs">
-              {QUICK_PHRASES.map((phrase, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    handleSendMessage(phrase);
-                    setShowChatDrawer(false);
-                  }}
-                  className="w-full text-left p-2.5 bg-slate-900 hover:bg-slate-800 rounded-xl text-slate-300 hover:text-amber-300 transition-colors cursor-pointer"
-                >
-                  {phrase}
-                </button>
-              ))}
+            {/* Custom Chat Input Box */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage();
+                setShowChatDrawer(false);
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="输入自定义聊天内容..."
+                className="flex-1 bg-slate-950 border border-slate-700/90 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+              />
+              <button
+                type="submit"
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>发送</span>
+              </button>
+            </form>
+
+            {/* Emoji Reactions Bar */}
+            <div className="space-y-1">
+              <span className="text-[11px] text-slate-400 font-medium">发送互动表情：</span>
+              <div className="grid grid-cols-8 gap-1 p-2 bg-slate-950/80 rounded-2xl border border-slate-800">
+                {EMOJI_OPTIONS.map((em) => (
+                  <button
+                    key={em}
+                    onClick={() => {
+                      handleSendEmoji(em);
+                      setShowChatDrawer(false);
+                    }}
+                    className="text-2xl hover:scale-125 transition-transform p-1 flex items-center justify-center cursor-pointer active:scale-95"
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick Phrases List */}
+            <div className="space-y-1 flex-1 overflow-y-auto">
+              <span className="text-[11px] text-slate-400 font-medium">快捷战局短语：</span>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {QUICK_PHRASES.map((phrase, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      handleSendMessage(phrase);
+                      setShowChatDrawer(false);
+                    }}
+                    className="w-full text-left p-2.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-800/80 hover:border-amber-500/40 rounded-xl text-xs text-slate-300 hover:text-amber-300 transition-colors cursor-pointer"
+                  >
+                    {phrase}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

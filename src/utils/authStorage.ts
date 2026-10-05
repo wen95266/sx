@@ -225,17 +225,129 @@ export function saveUser(user: UserProfile): void {
   }
 }
 
+const STORAGE_KEY_CHIP_TRANSFERS = 'shisanshui_chip_transfers';
+
+export interface ChipTransferRecord {
+  id: string;
+  fromPhone: string;
+  fromNickname: string;
+  fromAvatar: string;
+  toPhone: string;
+  toNickname: string;
+  toAvatar: string;
+  amount: number;
+  note?: string;
+  timestamp: number;
+}
+
+export const DEFAULT_PRESEEDED_ACCOUNTS: UserProfile[] = [
+  {
+    id: 'u_8000_seed',
+    phone: '13800138000',
+    nickname: '雀神老李',
+    avatar: '🧙',
+    token: 'tok_seed_1',
+    chips: 12800,
+    isLoggedIn: false,
+    totalGames: 128,
+    totalWins: 86,
+    gunShots: 32,
+    grandSlams: 6,
+    specialHands: 12,
+    createdAt: Date.now() - 86400000 * 3,
+    lastLoginAt: Date.now() - 3600000
+  },
+  {
+    id: 'u_8888_seed',
+    phone: '18888888888',
+    nickname: '发财顺风',
+    avatar: '👑',
+    token: 'tok_seed_2',
+    chips: 28888,
+    isLoggedIn: false,
+    totalGames: 215,
+    totalWins: 142,
+    gunShots: 58,
+    grandSlams: 15,
+    specialHands: 24,
+    createdAt: Date.now() - 86400000 * 7,
+    lastLoginAt: Date.now() - 1800000
+  },
+  {
+    id: 'u_8889_seed',
+    phone: '13988888888',
+    nickname: '九筒大侠',
+    avatar: '🥷',
+    token: 'tok_seed_3',
+    chips: 8888,
+    isLoggedIn: false,
+    totalGames: 95,
+    totalWins: 60,
+    gunShots: 18,
+    grandSlams: 3,
+    specialHands: 8,
+    createdAt: Date.now() - 86400000 * 2,
+    lastLoginAt: Date.now() - 7200000
+  },
+  {
+    id: 'u_9999_seed',
+    phone: '19999999999',
+    nickname: '十三幺常胜',
+    avatar: '🐉',
+    token: 'tok_seed_4',
+    chips: 36800,
+    isLoggedIn: false,
+    totalGames: 340,
+    totalWins: 230,
+    gunShots: 92,
+    grandSlams: 28,
+    specialHands: 38,
+    createdAt: Date.now() - 86400000 * 10,
+    lastLoginAt: Date.now() - 900000
+  },
+  {
+    id: 'u_8880_seed',
+    phone: '13888888888',
+    nickname: '赌圣阿星',
+    avatar: '🤵',
+    token: 'tok_seed_5',
+    chips: 16800,
+    isLoggedIn: false,
+    totalGames: 160,
+    totalWins: 110,
+    gunShots: 40,
+    grandSlams: 9,
+    specialHands: 18,
+    createdAt: Date.now() - 86400000 * 5,
+    lastLoginAt: Date.now() - 5400000
+  }
+];
+
 export function getAllAccounts(): UserProfile[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_ALL_ACCOUNTS);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        let updated = false;
+        for (const seed of DEFAULT_PRESEEDED_ACCOUNTS) {
+          if (!parsed.some((a) => a.phone === seed.phone)) {
+            parsed.push(seed);
+            updated = true;
+          }
+        }
+        if (updated) {
+          localStorage.setItem(STORAGE_KEY_ALL_ACCOUNTS, JSON.stringify(parsed));
+        }
+        return parsed;
+      }
     }
+    localStorage.setItem(STORAGE_KEY_ALL_ACCOUNTS, JSON.stringify(DEFAULT_PRESEEDED_ACCOUNTS));
+    return DEFAULT_PRESEEDED_ACCOUNTS;
   } catch (e) {
     console.error('Failed to read accounts', e);
   }
-  return [];
+  return DEFAULT_PRESEEDED_ACCOUNTS;
 }
 
 export async function registerWithPhone(
@@ -365,4 +477,148 @@ export function addChips(amount: number): UserProfile {
   user.chips = Math.max(0, user.chips + amount);
   saveUser(user);
   return user;
+}
+
+// --- 积分管理与手机号搜索、玩家互赠积分 (Points Management & Mutual Transfer) ---
+
+/**
+ * 通过手机号精确或模糊搜索已注册玩家
+ */
+export function findUserByPhone(phone: string): UserProfile | null {
+  const cleanPhone = phone.trim();
+  if (!cleanPhone) return null;
+
+  const accounts = getAllAccounts();
+  const directMatch = accounts.find((a) => a.phone === cleanPhone);
+  if (directMatch) return directMatch;
+
+  // Partial match if query is at least 4 digits
+  if (cleanPhone.length >= 4) {
+    const partialMatch = accounts.find((a) => a.phone.includes(cleanPhone));
+    if (partialMatch) return partialMatch;
+  }
+
+  return null;
+}
+
+/**
+ * 搜索符合手机号前缀或包含的玩家列表
+ */
+export function searchUsersByPhone(query: string): UserProfile[] {
+  const clean = query.trim();
+  const accounts = getAllAccounts();
+  if (!clean) return accounts;
+  return accounts.filter((a) => a.phone.includes(clean) || a.nickname.includes(clean));
+}
+
+/**
+ * 获取积分转账记录
+ */
+export function getTransferHistory(): ChipTransferRecord[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CHIP_TRANSFERS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error('Failed to read transfer history', e);
+  }
+  return [];
+}
+
+/**
+ * 保存积分转账记录
+ */
+export function recordChipTransfer(record: ChipTransferRecord): void {
+  try {
+    const history = getTransferHistory();
+    history.unshift(record);
+    // Keep last 50 records
+    localStorage.setItem(STORAGE_KEY_CHIP_TRANSFERS, JSON.stringify(history.slice(0, 50)));
+  } catch (e) {
+    console.error('Failed to save chip transfer', e);
+  }
+}
+
+/**
+ * 玩家之间相互赠送积分 (Mutual Transfer)
+ */
+export function transferChips(
+  targetPhone: string,
+  amount: number,
+  note = '牌友互赠水数'
+): { success: boolean; message: string; fromUser?: UserProfile; toUser?: UserProfile } {
+  const fromUser = getStoredUser();
+
+  if (!fromUser.isLoggedIn) {
+    return { success: false, message: '请先登录游戏账号后再进行积分赠送！' };
+  }
+
+  const cleanTargetPhone = targetPhone.trim();
+  if (!cleanTargetPhone) {
+    return { success: false, message: '请输入要赠送的玩家手机号！' };
+  }
+
+  if (fromUser.phone === cleanTargetPhone) {
+    return { success: false, message: '不能向自己的手机号赠送积分！' };
+  }
+
+  if (!amount || amount <= 0 || !Number.isInteger(amount)) {
+    return { success: false, message: '请输入有效的正整数积分数额！' };
+  }
+
+  if (fromUser.chips < amount) {
+    return {
+      success: false,
+      message: `积分不足！当前持有 ${fromUser.chips.toLocaleString()} 水，无法赠送 ${amount.toLocaleString()} 水。`
+    };
+  }
+
+  const accounts = getAllAccounts();
+  const targetIndex = accounts.findIndex((a) => a.phone === cleanTargetPhone);
+
+  if (targetIndex < 0) {
+    return {
+      success: false,
+      message: `未找到手机号为 ${cleanTargetPhone} 的注册玩家，请核对手机号码！`
+    };
+  }
+
+  const toUser = accounts[targetIndex];
+
+  // Execute transfer
+  fromUser.chips -= amount;
+  toUser.chips += amount;
+
+  // Persist updated records
+  saveUser(fromUser);
+  accounts[targetIndex] = toUser;
+  try {
+    localStorage.setItem(STORAGE_KEY_ALL_ACCOUNTS, JSON.stringify(accounts));
+  } catch (e) {
+    console.error('Failed to save accounts on transfer', e);
+  }
+
+  // Record transfer log
+  const record: ChipTransferRecord = {
+    id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    fromPhone: fromUser.phone,
+    fromNickname: fromUser.nickname,
+    fromAvatar: fromUser.avatar,
+    toPhone: toUser.phone,
+    toNickname: toUser.nickname,
+    toAvatar: toUser.avatar,
+    amount,
+    note: note || '牌友互助',
+    timestamp: Date.now()
+  };
+  recordChipTransfer(record);
+
+  return {
+    success: true,
+    message: `🎉 成功向 [${toUser.nickname}] 赠送 ${amount.toLocaleString()} 积分水数！`,
+    fromUser,
+    toUser
+  };
 }

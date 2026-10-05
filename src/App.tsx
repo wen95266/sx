@@ -45,6 +45,7 @@ export default function App() {
             clearMatchSession();
             setGameViewMode('lobby');
           }}
+          onUpdateUser={(u) => setCurrentUser(u)}
         />
       )}
 

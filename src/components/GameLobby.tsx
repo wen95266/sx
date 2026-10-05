@@ -24,6 +24,7 @@ import {
 import { LobbyRoom } from '../types/game';
 import { UserProfile, addChips, logoutUser } from '../utils/authStorage';
 import { SoundEffects } from '../utils/audio';
+import { PointsManagementModal } from './PointsManagementModal';
 
 interface GameLobbyProps {
   currentUser: UserProfile;
@@ -488,63 +489,15 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
         </span>
       </footer>
 
-      {/* 积分管理弹窗 */}
-      {showChipsModal && (
-        <div
-          className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-3 animate-in fade-in"
-          onClick={() => setShowChipsModal(false)}
-        >
-          <div
-            className="bg-[#0F172A] border border-slate-700 rounded-3xl max-w-sm w-full p-4 shadow-2xl flex flex-col gap-3 animate-in zoom-in-95"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <div className="flex items-center gap-2">
-                <Coins className="w-4 h-4 text-amber-400" />
-                <span className="font-bold text-sm text-white">积分管理与水数补助</span>
-              </div>
-              <button
-                onClick={() => setShowChipsModal(false)}
-                className="p-1 text-slate-400 hover:text-white bg-slate-800 rounded-full cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="p-3 bg-slate-950 border border-amber-500/30 rounded-2xl flex items-center justify-between">
-              <div>
-                <div className="text-[10px] text-slate-400">当前持有水数筹码</div>
-                <div className="text-lg font-black text-amber-400 font-mono">
-                  {currentUser.chips.toLocaleString()} 水
-                </div>
-              </div>
-              <button
-                onClick={() => handleClaimBonus(1000)}
-                className="px-3 py-1.5 bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1 shadow cursor-pointer active:scale-95"
-              >
-                <Gift className="w-3.5 h-3.5" />
-                <span>领 1000 水</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handleClaimBonus(5000)}
-                className="py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-amber-300 font-bold text-xs rounded-xl flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-              >
-                <span>🎁 领取 5,000 水</span>
-              </button>
-              <button
-                onClick={handleResetChips}
-                className="py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-bold text-xs rounded-xl flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>重置为 1,000 水</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 积分管理与手机号搜索互赠弹窗 */}
+      <PointsManagementModal
+        isOpen={showChipsModal}
+        onClose={() => setShowChipsModal(false)}
+        currentUser={currentUser}
+        onUserChange={(updated) => {
+          if (onUpdateUser) onUpdateUser(updated);
+        }}
+      />
     </div>
   );
 };

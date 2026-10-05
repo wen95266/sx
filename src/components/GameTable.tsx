@@ -59,9 +59,12 @@ import {
   Check
 } from 'lucide-react';
 
+import { PointsManagementModal } from './PointsManagementModal';
+
 interface GameTableProps {
   currentRoom?: LobbyRoom;
   onBackToLobby: () => void;
+  onUpdateUser?: (user: UserProfile) => void;
 }
 
 const EMOJI_OPTIONS = ['🔥', '👍', '😎', '🤣', '😭', '🤯', '👑', '💸'];
@@ -84,10 +87,12 @@ const PRESET_VOICE_LINES = [
 
 export const GameTable: React.FC<GameTableProps> = ({
   currentRoom,
-  onBackToLobby
+  onBackToLobby,
+  onUpdateUser
 }) => {
   const [currentUser, setCurrentUser] = useState<UserProfile>(getStoredUser());
   const [roundNumber, setRoundNumber] = useState(28);
+  const [showPointsModal, setShowPointsModal] = useState(false);
 
   // Game Phases: ARRANGING -> SHOWDOWN_HEAD -> SHOWDOWN_MID -> SHOWDOWN_TAIL -> ROUND_RESULT
   const [phase, setPhase] = useState<GamePhase>('ARRANGING');
@@ -912,11 +917,15 @@ export const GameTable: React.FC<GameTableProps> = ({
             <span>{activePlayerCount}/{is8Players ? '8' : '4'}</span>
           </div>
 
-          {/* Gold Chip Pill */}
-          <div className="px-2.5 py-1 bg-slate-950 border border-amber-500/40 rounded-full flex items-center gap-1.5 text-xs text-amber-400 font-mono font-bold shadow-xs">
-            <Coins className="w-3.5 h-3.5" />
+          {/* Gold Chip Pill (Click to open Points Management & Transfer) */}
+          <button
+            onClick={() => setShowPointsModal(true)}
+            className="px-2.5 py-1 bg-slate-950 hover:bg-slate-900 border border-amber-500/40 hover:border-amber-400 rounded-full flex items-center gap-1.5 text-xs text-amber-400 font-mono font-bold shadow-xs cursor-pointer transition-all active:scale-95 group"
+            title="点击打开积分管理，搜索手机号互赠积分"
+          >
+            <Coins className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
             <span>{currentUser.chips.toLocaleString()}</span>
-          </div>
+          </button>
 
           {/* Purple Chat Button */}
           <button
@@ -1978,6 +1987,17 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         </div>
       )}
+
+      {/* 8. POINTS MANAGEMENT & MUTUAL TRANSFER MODAL */}
+      <PointsManagementModal
+        isOpen={showPointsModal}
+        onClose={() => setShowPointsModal(false)}
+        currentUser={currentUser}
+        onUserChange={(updated) => {
+          setCurrentUser(updated);
+          if (onUpdateUser) onUpdateUser(updated);
+        }}
+      />
     </div>
   );
 };

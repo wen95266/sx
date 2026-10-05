@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Smartphone,
   Lock,
@@ -18,7 +18,8 @@ import {
   registerWithPhone,
   loginWithPhone,
   logoutUser,
-  getAuthorizedPhones
+  getAuthorizedPhones,
+  syncAuthorizedPhones
 } from '../utils/authStorage';
 import { SoundEffects } from '../utils/audio';
 
@@ -48,6 +49,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Message alert
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Auto-sync whitelist from server/Telegram Bot
+  useEffect(() => {
+    syncAuthorizedPhones().catch(() => {});
+  }, [isOpen, tab]);
 
   if (!isOpen && currentUser.isLoggedIn) return null;
 
@@ -77,26 +84,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
+    setLoading(true);
 
-    const res = registerWithPhone(phone, nickname, password, selectedAvatar);
-    if (!res.success) {
-      setErrorMsg(res.message);
-      SoundEffects.playWarning();
-      return;
-    }
+    try {
+      const res = await registerWithPhone(phone, nickname, password, selectedAvatar);
+      if (!res.success) {
+        setErrorMsg(res.message);
+        SoundEffects.playWarning();
+        setLoading(false);
+        return;
+      }
 
-    SoundEffects.playFanfare();
-    setSuccessMsg(res.message);
-    if (res.user) {
-      onUserChange(res.user);
-      setTimeout(() => {
-        setSuccessMsg(null);
-        onClose();
-      }, 900);
+      SoundEffects.playFanfare();
+      setSuccessMsg(res.message);
+      if (res.user) {
+        onUserChange(res.user);
+        setTimeout(() => {
+          setSuccessMsg(null);
+          onClose();
+        }, 900);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '注册发生异常，请重试';
+      setErrorMsg(msg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -331,9 +347,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <button
                 type="submit"
-                className="w-full mt-2 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-500/20 cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                disabled={loading}
+                className="w-full mt-2 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-500/20 cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
-                <span>立即注册并登录</span>
+                {loading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>正在核验授权...</span>
+                  </>
+                ) : (
+                  <span>立即注册并登录</span>
+                )}
               </button>
 
               <div className="text-center pt-1">

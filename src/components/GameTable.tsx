@@ -379,14 +379,17 @@ export const GameTable: React.FC<GameTableProps> = ({
 
     setPlayers(updatedPlayers);
     setPhase('SHOWDOWN_HEAD');
+    if (soundEnabled) SoundEffects.playShowdownDing(false);
 
     // Step 1: Head Showdown (前墩)
     setTimeout(() => {
       setPhase('SHOWDOWN_MID');
+      if (soundEnabled) SoundEffects.playShowdownDing(false);
 
       // Step 2: Middle Showdown (中墩)
       setTimeout(() => {
         setPhase('SHOWDOWN_TAIL');
+        if (soundEnabled) SoundEffects.playShowdownDing(true);
 
         // Step 3: Tail Showdown (后墩)
         setTimeout(() => {
@@ -397,21 +400,31 @@ export const GameTable: React.FC<GameTableProps> = ({
           setPhase('ROUND_RESULT');
 
           const myDelta = result.scores['player_me'] || 0;
+          const hasGunShot = result.gunShots && result.gunShots.length > 0;
+          const hasSlam = Boolean(result.grandSlamPlayerId);
+
+          if (hasSlam && soundEnabled) {
+            SoundEffects.playGunShot();
+            setTimeout(() => SoundEffects.playFanfare(), 400);
+          } else if (hasGunShot && soundEnabled) {
+            SoundEffects.playGunShot();
+          }
+
           const updatedUser = recordGameResult(myDelta, myDelta > 0, 0, false, false);
           setCurrentUser(updatedUser);
 
           if (myDelta > 0) {
             confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-            if (soundEnabled) SoundEffects.playFanfare();
+            if (soundEnabled && !hasSlam) SoundEffects.playFanfare();
           } else {
-            if (soundEnabled) SoundEffects.playWarning();
+            if (soundEnabled && !hasGunShot) SoundEffects.playWarning();
           }
         }, 1500);
       }, 1500);
     }, 1500);
   };
 
-  // Send message or quick phrase
+  // Send message or quick phrase with Mandarin TTS voice
   const handleSendMessage = (textToSend?: string) => {
     const content = textToSend || chatInput.trim();
     if (!content) return;
@@ -424,7 +437,11 @@ export const GameTable: React.FC<GameTableProps> = ({
     };
     setSpeechBubbles((prev) => [...prev, bubble]);
     setChatInput('');
-    if (soundEnabled) SoundEffects.playMessagePop();
+
+    if (soundEnabled) {
+      SoundEffects.playMessagePop();
+      SoundEffects.speakMandarin(content);
+    }
 
     setTimeout(() => {
       setSpeechBubbles((prev) => prev.filter((b) => b.id !== bubble.id));

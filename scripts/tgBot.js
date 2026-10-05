@@ -49,6 +49,7 @@ loadEnv();
 const BOT_TOKEN = process.env.TG_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_ID = String(process.env.TG_ADMIN_ID || process.env.TELEGRAM_ADMIN_ID || '').trim();
 const AUTH_FILE_PATH = path.resolve(process.cwd(), 'authorized_phones.json');
+const PUBLIC_AUTH_FILE_PATH = path.resolve(process.cwd(), 'public', 'authorized_phones.json');
 
 if (!BOT_TOKEN) {
   console.error('\n❌ 未在 .env 文件中检测到 TG_BOT_TOKEN！');
@@ -58,23 +59,32 @@ if (!BOT_TOKEN) {
   process.exit(1);
 }
 
-// 2. 授权手机号白名单持久化文件读写
+// 2. 授权手机号白名单持久化文件读写 (同时同步到 public 静态目录供前端请求)
 function getAuthorizedPhones() {
-  try {
-    if (fs.existsSync(AUTH_FILE_PATH)) {
-      const raw = fs.readFileSync(AUTH_FILE_PATH, 'utf8');
-      const list = JSON.parse(raw);
-      if (Array.isArray(list)) return list;
-    }
-  } catch (e) {
-    console.error('[TG Bot] 读取 authorized_phones.json 失败:', e.message);
+  const possiblePaths = [PUBLIC_AUTH_FILE_PATH, AUTH_FILE_PATH];
+  for (const p of possiblePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, 'utf8');
+        const list = JSON.parse(raw);
+        if (Array.isArray(list) && list.length > 0) return list;
+      }
+    } catch (e) {}
   }
   return ['13800138000', '18888888888', '13988888888', '19999999999'];
 }
 
 function saveAuthorizedPhones(list) {
   try {
-    fs.writeFileSync(AUTH_FILE_PATH, JSON.stringify(list, null, 2), 'utf8');
+    const jsonStr = JSON.stringify(list, null, 2);
+    // 确保 public 目录存在
+    const publicDir = path.resolve(process.cwd(), 'public');
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
+    fs.writeFileSync(PUBLIC_AUTH_FILE_PATH, jsonStr, 'utf8');
+    fs.writeFileSync(AUTH_FILE_PATH, jsonStr, 'utf8');
+    console.log(`[TG Bot] ✓ 已成功同步授权白名单 (${list.length} 个手机号) 到前端目录`);
     return true;
   } catch (e) {
     console.error('[TG Bot] 保存 authorized_phones.json 失败:', e.message);
@@ -247,8 +257,8 @@ async function handleIncomingMessage(msg) {
     );
   }
 
-  if (text.startsWith('/auth ') || text.startsWith('授权 ')) {
-    const phone = text.replace('/auth ', '').replace('授权 ', '').trim();
+  if (text.startsWith('/auth ') || text.startsWith('授权 ') || /^(\+?86)?1\d{10}$/.test(text)) {
+    const phone = text.replace('/auth ', '').replace('授权 ', '').replace(/^\+?86/, '').trim();
     if (!phone) {
       return sendMessage(chatId, '❌ 请提供要授权的手机号，例如：<code>/auth 13800138000</code>');
     }

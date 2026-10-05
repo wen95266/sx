@@ -1,6 +1,7 @@
 /**
  * Player Authentication and Profile Storage
  * Strictly requires mobile phone + 6-character password registration with Telegram Bot Authorization Whitelist.
+ * Auto-syncs with server authorized_phones.json on each registration attempt.
  */
 
 export interface UserProfile {
@@ -37,7 +38,7 @@ export const DEFAULT_AUTHORIZED_PHONES = [
   '13888888888'
 ];
 
-// --- 授权手机号白名单管理 (Telegram Bot 授权) ---
+// --- 授权手机号白名单管理 (与服务器/Telegram Bot 实时同步) ---
 
 export function getAuthorizedPhones(): string[] {
   try {
@@ -58,6 +59,40 @@ export function saveAuthorizedPhones(phones: string[]): void {
   } catch (e) {
     console.error('Failed to save authorized phones', e);
   }
+}
+
+/**
+ * 实时从服务端拉取最新的 Telegram Bot 授权手机号白名单
+ */
+export async function syncAuthorizedPhones(): Promise<string[]> {
+  try {
+    const res = await fetch(`/authorized_phones.json?_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list)) {
+        // 合并本地与服务端名单
+        const current = getAuthorizedPhones();
+        const merged = Array.from(new Set([...current, ...list]));
+        saveAuthorizedPhones(merged);
+        return merged;
+      }
+    }
+  } catch (err) {
+    console.warn('[Auth] 同步服务端授权白名单稍有延迟，使用本地缓存:', err);
+  }
+  return getAuthorizedPhones();
+}
+
+// 立即在前端初始化时静默异步同步一次
+if (typeof window !== 'undefined') {
+  syncAuthorizedPhones().catch(() => {});
 }
 
 export function isPhoneAuthorized(phone: string): boolean {
@@ -155,18 +190,18 @@ export function getAllAccounts(): UserProfile[] {
 }
 
 /**
- * 手机号注册
+ * 手机号注册 (异步自动向服务端二次核验授权状态)
  * 规则：
  * 1. 只有 Bot 授权的手机号才能注册
  * 2. 需要昵称
  * 3. 密码精确 6 位数 (不限制大小写字母/字符)
  */
-export function registerWithPhone(
+export async function registerWithPhone(
   phone: string,
   nickname: string,
   password: string,
   avatar?: string
-): { success: boolean; message: string; user?: UserProfile } {
+): Promise<{ success: boolean; message: string; user?: UserProfile }> {
   const cleanPhone = phone.trim();
   const cleanNickname = nickname.trim();
   const cleanPassword = password.trim();
@@ -175,25 +210,28 @@ export function registerWithPhone(
     return { success: false, message: '请输入手机号！' };
   }
 
-  // 1. 校验 Bot 授权白名单
-  if (!isPhoneAuthorized(cleanPhone)) {
+  // 1. 实时从服务器拉取最新的 Telegram Bot 授权列表
+  const latestList = await syncAuthorizedPhones();
+
+  // 2. 校验 Bot 授权白名单
+  if (!latestList.includes(cleanPhone) && !isPhoneAuthorized(cleanPhone)) {
     return {
       success: false,
       message: '⚠️ 该手机号未获得管理员授权！请联系管理员在 Telegram Bot 中进行授权后再注册。'
     };
   }
 
-  // 2. 校验昵称
+  // 3. 校验昵称
   if (!cleanNickname) {
     return { success: false, message: '请输入玩家昵称！' };
   }
 
-  // 3. 校验密码长度 (精确 6 位数)
+  // 4. 校验密码长度 (精确 6 位数)
   if (cleanPassword.length !== 6) {
     return { success: false, message: '密码必须为 6 位数字符（不限大小写字母/数字）！' };
   }
 
-  // 4. 检查是否已被注册
+  // 5. 检查是否已被注册
   const accounts = getAllAccounts();
   const existing = accounts.find((a) => a.phone === cleanPhone);
   if (existing) {

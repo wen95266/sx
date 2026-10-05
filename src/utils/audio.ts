@@ -363,11 +363,103 @@ function getAudioContext(): AudioContext | null {
   return audioCtx;
 }
 
+let cachedVoices: SpeechSynthesisVoice[] = [];
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  const updateVoices = () => {
+    try {
+      cachedVoices = window.speechSynthesis.getVoices() || [];
+    } catch (e) {
+      console.warn('[Audio] Error loading voices:', e);
+    }
+  };
+  updateVoices();
+  window.speechSynthesis.onvoiceschanged = updateVoices;
+}
+
 export const SoundEffects = {
+  // 0. 角色专属 Web Audio 辅助音效 (确保任何手机或浏览器均有极高可辨识度角色声质)
+  playPersonaAudioCue(persona: VoicePersona) {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      if (persona === 'male' || persona === 'roar') {
+        // 男低音 / 咆哮：低沉 Sawtooth 锯齿波 (90Hz -> 65Hz)
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(95, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(65, ctx.currentTime + 0.28);
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(220, ctx.currentTime);
+
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+      } else if (persona === 'elder') {
+        // 老人：沧桑低频 (105Hz Triangle)
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(105, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(75, ctx.currentTime + 0.35);
+
+        gain.gain.setValueAtTime(0.18, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+      } else if (persona === 'child') {
+        // 小孩：清脆高音风铃 (880Hz -> 1320Hz Sine)
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.2);
+
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+      } else if (persona === 'cute') {
+        // 撒娇妹子：高亢甜美声 (1046Hz -> 1568Hz Sine)
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1046, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1568, ctx.currentTime + 0.22);
+
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+      } else {
+        // 标准清爽女声
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523, ctx.currentTime);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+      }
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch (e) {
+      console.warn('[Audio] Persona cue error:', e);
+    }
+  },
+
   // 1. 角色特征普通话 TTS 语音播放 (男声 / 女声 / 老人 / 小孩 / 撒娇 / 怒吼)
   speakMandarinWithRole(text: string, pitch = 1.0, rate = 1.0, persona: VoicePersona = 'male') {
     try {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+      // 播放角色特征提示音
+      this.playPersonaAudioCue(persona);
 
       let cleanText = text
         .replace(
@@ -384,24 +476,24 @@ export const SoundEffects = {
       const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = 'zh-CN';
 
-      // Enforce distinct acoustic pitch & rate per persona
+      // Enforce extreme acoustic pitch modulation per persona to guarantee distinction even on 1-voice devices
       let finalPitch = pitch;
       let finalRate = rate;
 
       if (persona === 'child') {
-        finalPitch = 1.9; // 高音童声
-        finalRate = 1.25;
+        finalPitch = 1.95; // 极高童声
+        finalRate = 1.28;
       } else if (persona === 'cute') {
-        finalPitch = 1.8; // 高音娇滴
+        finalPitch = 1.85; // 高声撒娇
         finalRate = 0.92;
       } else if (persona === 'male') {
-        finalPitch = 0.45; // 浑厚男低音
+        finalPitch = 0.18; // 极低男低音 (音调下降两八度，强制压低音色)
         finalRate = 1.05;
       } else if (persona === 'elder') {
-        finalPitch = 0.38; // 沧桑老者低音
-        finalRate = 0.8;
+        finalPitch = 0.12; // 极低沧桑老者音
+        finalRate = 0.78;
       } else if (persona === 'roar') {
-        finalPitch = 0.32; // 狂暴咆哮低音
+        finalPitch = 0.1; // 极低咆哮重音
         finalRate = 1.35;
       } else if (persona === 'female') {
         finalPitch = 1.25; // 清爽女声
@@ -415,32 +507,47 @@ export const SoundEffects = {
       utterance.pitch = finalPitch;
       utterance.volume = persona === 'roar' ? 1.0 : 0.95;
 
-      const voices = window.speechSynthesis.getVoices();
-      let matchedVoice;
+      const liveVoices = window.speechSynthesis.getVoices();
+      const voices = liveVoices.length > 0 ? liveVoices : cachedVoices;
+
+      let matchedVoice: SpeechSynthesisVoice | undefined;
 
       if (persona === 'female' || persona === 'cute') {
-        matchedVoice = voices.find(
-          (v) =>
-            (v.lang.includes('zh') || v.lang.includes('cmn')) &&
-            (v.name.includes('Xiaoxiao') ||
-              v.name.includes('Female') ||
-              v.name.includes('Huihui') ||
-              v.name.includes('Yaoyao') ||
-              v.name.includes('Tingting') ||
-              v.name.includes('sfg'))
-        );
+        matchedVoice = voices.find((v) => {
+          const name = v.name.toLowerCase();
+          const lang = v.lang.toLowerCase();
+          return (
+            (lang.includes('zh') || lang.includes('cmn')) &&
+            (name.includes('xiaoxiao') ||
+              name.includes('female') ||
+              name.includes('huihui') ||
+              name.includes('yaoyao') ||
+              name.includes('tingting') ||
+              name.includes('sfg') ||
+              name.includes('女') ||
+              name.includes('woman'))
+          );
+        });
       } else if (persona === 'male' || persona === 'roar' || persona === 'elder') {
-        matchedVoice = voices.find(
-          (v) =>
-            (v.lang.includes('zh') || v.lang.includes('cmn')) &&
-            (v.name.includes('Yunxi') ||
-              v.name.includes('Male') ||
-              v.name.includes('Kangkang') ||
-              v.name.includes('Yunjian') ||
-              v.name.includes('c2f') ||
-              v.name.includes('a1') ||
-              v.name.toLowerCase().includes('man'))
-        );
+        matchedVoice = voices.find((v) => {
+          const name = v.name.toLowerCase();
+          const lang = v.lang.toLowerCase();
+          return (
+            (lang.includes('zh') || lang.includes('cmn')) &&
+            (name.includes('yunxi') ||
+              name.includes('yunjian') ||
+              name.includes('kangkang') ||
+              name.includes('male') ||
+              name.includes('c2f') ||
+              name.includes('a1') ||
+              name.includes('b1') ||
+              name.includes('d1') ||
+              name.includes('cmn') ||
+              name.includes('男') ||
+              name.includes('man') ||
+              name.includes('boy'))
+          );
+        });
       }
 
       if (!matchedVoice) {
@@ -449,7 +556,13 @@ export const SoundEffects = {
         );
       }
 
-      if (matchedVoice) utterance.voice = matchedVoice;
+      if (!matchedVoice && voices.length > 0) {
+        matchedVoice = voices[0];
+      }
+
+      if (matchedVoice) {
+        utterance.voice = matchedVoice;
+      }
 
       window.speechSynthesis.speak(utterance);
     } catch (e) {

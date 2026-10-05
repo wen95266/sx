@@ -24,22 +24,27 @@ export const SoundEffects = {
     try {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-      // 过滤表情符号，确保普通话发音纯正干净
-      const cleanText = text
+      // 过滤表情符号与特殊标记，提取干净普通话文字
+      let cleanText = text
         .replace(
           /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F018}-\u{1F270}\u{2388}\u{2B05}\u{2B06}\u{2B07}\u{2B1B}\u{2B1C}\u{2B50}\u{2B55}\u{2934}\u{2935}\u{2194}-\u{2199}\u{21A9}-\u{21AA}\u{3299}\u{3297}\u{303D}\u{00A9}\u{00AE}\u{2122}]/gu,
           ''
         )
-        .replace(/【.*?】/g, '')
+        .replace(/[【】]/g, '')
         .trim();
 
-      if (!cleanText) return;
+      // 如果是语音消息标记，转换为自然普通话语音
+      if (cleanText.includes('语音消息') || cleanText.includes('语音')) {
+        cleanText = cleanText.replace(/0:\d{2}/g, '').trim() || '收到一条语音消息！';
+      }
+
+      if (!cleanText) cleanText = '收到新消息！';
 
       window.speechSynthesis.cancel(); // 停止上一句
 
       const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = 'zh-CN';
-      utterance.rate = 1.05; // 适中微快竞技感语速
+      utterance.rate = 1.08; // 竞技感生动语速
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
 
@@ -50,7 +55,9 @@ export const SoundEffects = {
           v.lang.includes('cmn') ||
           v.name.includes('Chinese') ||
           v.name.includes('Mandarin') ||
-          v.name.includes('普通话')
+          v.name.includes('普通话') ||
+          v.name.includes('Xiaoxiao') ||
+          v.name.includes('Yunxi')
       );
       if (zhVoice) {
         utterance.voice = zhVoice;
@@ -60,6 +67,45 @@ export const SoundEffects = {
     } catch (e) {
       console.warn('[Audio] Mandarin TTS error:', e);
     }
+  },
+
+  // 语音对讲机哔声 (Walkie-talkie chirp)
+  playVoiceChirp() {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(1320, now + 0.05);
+
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.12);
+    } catch {}
+  },
+
+  // 播放语音消息气泡 (支持实际录音 Blob 与 TTS 普通话双通道)
+  playVoiceMessage(audioUrl?: string, textContent?: string) {
+    this.playVoiceChirp();
+    if (audioUrl) {
+      try {
+        const audio = new Audio(audioUrl);
+        audio.play().catch(() => {
+          this.speakMandarin(textContent || '收到语音消息');
+        });
+        return;
+      } catch {}
+    }
+    this.speakMandarin(textContent || '收到一条语音消息！');
   },
 
   // 2. Card click / select

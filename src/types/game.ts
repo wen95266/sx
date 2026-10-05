@@ -158,6 +158,9 @@ export interface SpeechBubble {
   playerId: string;
   text: string;
   createdAt: number;
+  type?: 'text' | 'voice';
+  audioUrl?: string;
+  duration?: number;
 }
 
 export type RoomType = 'realtime' | 'scheduled'; // 实时场 vs 预约场

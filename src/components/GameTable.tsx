@@ -17,6 +17,7 @@ import {
   sortCards,
   evaluateDun,
   validateDaoPai,
+  compareDuns,
   calculateSmartArrangements,
   calculateGameSettlement
 } from '../utils/cardLogic';
@@ -47,10 +48,15 @@ import {
   Trophy,
   Smile,
   Radio,
-  Play,
   Square,
   Users,
-  Bot
+  Bot,
+  AlertTriangle,
+  FastForward,
+  Crown,
+  ShieldAlert,
+  ChevronRight,
+  Check
 } from 'lucide-react';
 
 interface GameTableProps {
@@ -83,9 +89,15 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [currentUser, setCurrentUser] = useState<UserProfile>(getStoredUser());
   const [roundNumber, setRoundNumber] = useState(28);
 
-  // Game Phases
+  // Game Phases: ARRANGING -> SHOWDOWN_HEAD -> SHOWDOWN_MID -> SHOWDOWN_TAIL -> ROUND_RESULT
   const [phase, setPhase] = useState<GamePhase>('ARRANGING');
   const [countdown, setCountdown] = useState(30);
+
+  // Multi-card selection for manual arranging
+  const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
+  const [arrangeError, setArrangeError] = useState<string | null>(null);
+  const [showDaoPaiModal, setShowDaoPaiModal] = useState(false);
+  const [daoPaiReason, setDaoPaiReason] = useState<string>('');
 
   // Hosting / Auto-Arrange Mode
   const [isHosting, setIsHosting] = useState(false);
@@ -96,6 +108,9 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Network & Reconnect Status
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [reconnectTip, setReconnectTip] = useState<string | null>(null);
+
+  // Showdown View Mode in ROUND_RESULT: 'all_duns' (三墩全览) or 'matches' (对决明细)
+  const [settlementTab, setSettlementTab] = useState<'all_duns' | 'matches'>('all_duns');
 
   // 8 Player Seats
   const [activeSeatId, setActiveSeatId] = useState('player_me');
@@ -262,7 +277,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     }
   ]);
 
-  // Card Duns
+  // Card Duns for user (unrestricted card count during arranging, total = 13)
   const [headCards, setHeadCards] = useState<Card[]>([]);
   const [midCards, setMidCards] = useState<Card[]>([]);
   const [tailCards, setTailCards] = useState<Card[]>([]);
@@ -297,6 +312,46 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   const is8Players = currentRoom?.maxPlayers === 8;
   const activePlayerCount = is8Players ? 8 : 4;
+  const activeParticipants = players.slice(0, activePlayerCount);
+
+  // Toggle card selection
+  const handleCardClick = (card: Card) => {
+    if (phase !== 'ARRANGING') return;
+    if (soundEnabled) SoundEffects.playCardClick();
+    setSelectedCardIds((prev) =>
+      prev.includes(card.id) ? prev.filter((id) => id !== card.id) : [...prev, card.id]
+    );
+  };
+
+  // Move selected cards to a target dun
+  const handleMoveSelectedToDun = (targetDun: 'head' | 'mid' | 'tail') => {
+    if (phase !== 'ARRANGING') return;
+    if (selectedCardIds.length === 0) return;
+
+    const allCards = [...headCards, ...midCards, ...tailCards];
+    const movingCards = allCards.filter((c) => selectedCardIds.includes(c.id));
+    if (movingCards.length === 0) return;
+
+    let newHead = headCards.filter((c) => !selectedCardIds.includes(c.id));
+    let newMid = midCards.filter((c) => !selectedCardIds.includes(c.id));
+    let newTail = tailCards.filter((c) => !selectedCardIds.includes(c.id));
+
+    if (targetDun === 'head') {
+      newHead = [...newHead, ...movingCards];
+    } else if (targetDun === 'mid') {
+      newMid = [...newMid, ...movingCards];
+    } else if (targetDun === 'tail') {
+      newTail = [...newTail, ...movingCards];
+    }
+
+    setHeadCards(sortCards(newHead));
+    setMidCards(sortCards(newMid));
+    setTailCards(sortCards(newTail));
+    setSelectedCardIds([]);
+    setArrangeError(null);
+
+    if (soundEnabled) SoundEffects.playDealCard();
+  };
 
   // Cycle Through Smart Hand Combinations
   const handleCycleSmartHand = useCallback(() => {
@@ -310,89 +365,131 @@ export const GameTable: React.FC<GameTableProps> = ({
     setHeadCards(opt.head);
     setMidCards(opt.middle);
     setTailCards(opt.tail);
+    setSelectedCardIds([]);
+    setArrangeError(null);
   }, [smartOptions, currentOptionIndex, soundEnabled]);
 
-  // Submit Hand & Trigger Showdown
+  // Execute actual submission and begin showdown sequence
+  const executeSubmitShowdown = useCallback(
+    (hCards: Card[], mCards: Card[], tCards: Card[], isDaoPai = false, daoReason?: string) => {
+      setSelectedCardIds([]);
+      setArrangeError(null);
+      setShowDaoPaiModal(false);
+
+      const updatedPlayers = players.map((p) => {
+        if (p.id === 'player_me') {
+          return {
+            ...p,
+            isReady: true,
+            arrangement: {
+              head: hCards,
+              middle: mCards,
+              tail: tCards,
+              isDaoPai,
+              daoPaiReason: daoReason
+            }
+          };
+        }
+        return p;
+      });
+
+      setPlayers(updatedPlayers);
+      setPhase('SHOWDOWN_HEAD');
+
+      if (soundEnabled) {
+        SoundEffects.playShowdownDing(false);
+        SoundEffects.speakMandarin('前墩比牌！');
+      }
+
+      // Step 1: Head Showdown (前墩)
+      setTimeout(() => {
+        setPhase('SHOWDOWN_MID');
+        if (soundEnabled) {
+          SoundEffects.playShowdownDing(false);
+          SoundEffects.speakMandarin('中墩比牌！');
+        }
+
+        // Step 2: Middle Showdown (中墩)
+        setTimeout(() => {
+          setPhase('SHOWDOWN_TAIL');
+          if (soundEnabled) {
+            SoundEffects.playShowdownDing(true);
+            SoundEffects.speakMandarin('后墩比牌，决胜局！');
+          }
+
+          // Step 3: Tail Showdown (后墩)
+          setTimeout(() => {
+            const participants = updatedPlayers.slice(0, activePlayerCount);
+            const result = calculateGameSettlement(participants);
+
+            setSettlement(result);
+            setPhase('ROUND_RESULT');
+
+            const myDelta = result.scores['player_me'] || 0;
+            const hasGunShot = result.gunShots && result.gunShots.length > 0;
+            const hasSlam = Boolean(result.grandSlamPlayerId);
+
+            if (hasSlam && soundEnabled) {
+              SoundEffects.playGunShot();
+              SoundEffects.speakMandarin('全垒打！通杀全场！');
+              setTimeout(() => SoundEffects.playFanfare(), 400);
+            } else if (hasGunShot && soundEnabled) {
+              SoundEffects.playGunShot();
+              SoundEffects.speakMandarin('打枪！');
+            } else if (soundEnabled) {
+              SoundEffects.speakMandarin('比牌结束，查看结算！');
+            }
+
+            const updatedUser = recordGameResult(myDelta, myDelta > 0, 0, false, false);
+            setCurrentUser(updatedUser);
+
+            if (myDelta > 0) {
+              confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+              if (soundEnabled && !hasSlam) SoundEffects.playFanfare();
+            } else {
+              if (soundEnabled && !hasGunShot) SoundEffects.playWarning();
+            }
+          }, 2600);
+        }, 2600);
+      }, 2600);
+    },
+    [players, activePlayerCount, soundEnabled]
+  );
+
+  // Fast forward directly to final settlement
+  const handleSkipShowdown = () => {
+    const participants = players.slice(0, activePlayerCount);
+    const result = calculateGameSettlement(participants);
+    setSettlement(result);
+    setPhase('ROUND_RESULT');
+    if (soundEnabled) SoundEffects.playShowdownDing(true);
+  };
+
+  // Submit Hand: Checks strictly 3, 5, 5 card counts only upon submission
   const handleSubmitHand = useCallback(() => {
     if (soundEnabled) SoundEffects.playCardClick();
 
-    // Use current Dun or optimal smart arrangement
-    let finalHead = headCards.length === 3 ? headCards : smartOptions[0]?.head || headCards;
-    let finalMid = midCards.length === 5 ? midCards : smartOptions[0]?.middle || midCards;
-    let finalTail = tailCards.length === 5 ? tailCards : smartOptions[0]?.tail || tailCards;
-
-    // Safety fallback: ensure optimal valid arrangement
-    if (smartOptions.length > 0 && (finalHead.length !== 3 || finalMid.length !== 5 || finalTail.length !== 5)) {
-      finalHead = smartOptions[0].head;
-      finalMid = smartOptions[0].middle;
-      finalTail = smartOptions[0].tail;
+    // STRICT CHECK: Head must be 3, Middle must be 5, Tail must be 5
+    if (headCards.length !== 3 || midCards.length !== 5 || tailCards.length !== 5) {
+      setArrangeError(
+        `⚠️ 牌数不符合规则！前墩需3张（当前${headCards.length}张），中墩需5张（当前${midCards.length}张），后墩需5张（当前${tailCards.length}张）。请点击牌进行多选并调整！`
+      );
+      if (soundEnabled) SoundEffects.playWarning();
+      return;
     }
 
-    const daoPaiResult = validateDaoPai(finalHead, finalMid, finalTail);
+    // Check Dao-Pai (倒牌)
+    const daoCheck = validateDaoPai(headCards, midCards, tailCards);
+    if (daoCheck.isDaoPai) {
+      setDaoPaiReason(daoCheck.reason || '前墩大于中墩，或中墩大于后墩！');
+      setShowDaoPaiModal(true);
+      if (soundEnabled) SoundEffects.playWarning();
+      return;
+    }
 
-    const updatedPlayers = players.map((p) => {
-      if (p.id === 'player_me') {
-        return {
-          ...p,
-          isReady: true,
-          arrangement: {
-            head: finalHead,
-            middle: finalMid,
-            tail: finalTail,
-            isDaoPai: daoPaiResult.isDaoPai,
-            daoPaiReason: daoPaiResult.reason
-          }
-        };
-      }
-      return p;
-    });
-
-    setPlayers(updatedPlayers);
-    setPhase('SHOWDOWN_HEAD');
-    if (soundEnabled) SoundEffects.playShowdownDing(false);
-
-    // Step 1: Head Showdown (前墩)
-    setTimeout(() => {
-      setPhase('SHOWDOWN_MID');
-      if (soundEnabled) SoundEffects.playShowdownDing(false);
-
-      // Step 2: Middle Showdown (中墩)
-      setTimeout(() => {
-        setPhase('SHOWDOWN_TAIL');
-        if (soundEnabled) SoundEffects.playShowdownDing(true);
-
-        // Step 3: Tail Showdown (后墩)
-        setTimeout(() => {
-          const activeParticipants = updatedPlayers.slice(0, activePlayerCount);
-          const result = calculateGameSettlement(activeParticipants);
-
-          setSettlement(result);
-          setPhase('ROUND_RESULT');
-
-          const myDelta = result.scores['player_me'] || 0;
-          const hasGunShot = result.gunShots && result.gunShots.length > 0;
-          const hasSlam = Boolean(result.grandSlamPlayerId);
-
-          if (hasSlam && soundEnabled) {
-            SoundEffects.playGunShot();
-            setTimeout(() => SoundEffects.playFanfare(), 400);
-          } else if (hasGunShot && soundEnabled) {
-            SoundEffects.playGunShot();
-          }
-
-          const updatedUser = recordGameResult(myDelta, myDelta > 0, 0, false, false);
-          setCurrentUser(updatedUser);
-
-          if (myDelta > 0) {
-            confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-            if (soundEnabled && !hasSlam) SoundEffects.playFanfare();
-          } else {
-            if (soundEnabled && !hasGunShot) SoundEffects.playWarning();
-          }
-        }, 1500);
-      }, 1500);
-    }, 1500);
-  }, [headCards, midCards, tailCards, smartOptions, players, activePlayerCount, soundEnabled]);
+    // Valid, proceed to submit
+    executeSubmitShowdown(headCards, midCards, tailCards, false);
+  }, [headCards, midCards, tailCards, executeSubmitShowdown, soundEnabled]);
 
   // Deal 13 Cards to everyone & Auto Compute Best Hand (1 deck for 4p, 2 decks for 8p)
   const startNewRound = useCallback(() => {
@@ -418,6 +515,10 @@ export const GameTable: React.FC<GameTableProps> = ({
       setMidCards(handMe.slice(3, 8));
       setTailCards(handMe.slice(8, 13));
     }
+
+    setSelectedCardIds([]);
+    setArrangeError(null);
+    setShowDaoPaiModal(false);
 
     // Set player arrangements dynamically for 4 or 8 players
     const updatedPlayers = players.map((p, idx) => {
@@ -520,18 +621,22 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Hosting (托管) / Auto-Arrange Effect: Automatically pick best hand and auto-submit
   useEffect(() => {
     if (isHosting && phase === 'ARRANGING') {
-      if (smartOptions.length > 0) {
-        setHeadCards(smartOptions[0].head);
-        setMidCards(smartOptions[0].middle);
-        setTailCards(smartOptions[0].tail);
+      const best = smartOptions[0];
+      if (best) {
+        setHeadCards(best.head);
+        setMidCards(best.middle);
+        setTailCards(best.tail);
       }
-      // Auto submit after a brief 1.5s delay to simulate smart thinking
       const hostTimer = setTimeout(() => {
-        handleSubmitHand();
-      }, 1500);
+        if (best) {
+          executeSubmitShowdown(best.head, best.middle, best.tail, false);
+        } else {
+          handleSubmitHand();
+        }
+      }, 1200);
       return () => clearTimeout(hostTimer);
     }
-  }, [isHosting, phase, smartOptions, handleSubmitHand]);
+  }, [isHosting, phase, smartOptions, executeSubmitShowdown, handleSubmitHand]);
 
   // Timer countdown: Auto arrange and auto submit when time expires
   useEffect(() => {
@@ -540,20 +645,23 @@ export const GameTable: React.FC<GameTableProps> = ({
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          // 超时自动理牌并提交
-          if (smartOptions.length > 0) {
-            setHeadCards(smartOptions[0].head);
-            setMidCards(smartOptions[0].middle);
-            setTailCards(smartOptions[0].tail);
+          // 超时自动理牌并提交最佳牌型，避免倒牌判负
+          const best = smartOptions[0];
+          if (best) {
+            setHeadCards(best.head);
+            setMidCards(best.middle);
+            setTailCards(best.tail);
+            executeSubmitShowdown(best.head, best.middle, best.tail, false);
+          } else {
+            handleSubmitHand();
           }
-          handleSubmitHand();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [phase, smartOptions, handleSubmitHand]);
+  }, [phase, smartOptions, executeSubmitShowdown, handleSubmitHand]);
 
   // Send message or quick phrase with Mandarin TTS voice
   const handleSendMessage = (textToSend?: string) => {
@@ -680,58 +788,83 @@ export const GameTable: React.FC<GameTableProps> = ({
     }, 2500);
   };
 
-  // Dun Evaluations
+  // Dun Evaluations (handles any card count smoothly)
   const headEval: DunEvaluation = evaluateDun(headCards, true);
   const midEval: DunEvaluation = evaluateDun(midCards, false);
   const tailEval: DunEvaluation = evaluateDun(tailCards, false);
 
-  const getDunLabel = (evalResult: DunEvaluation, cards: Card[], isHead = false) => {
-    if (cards.length === 0) return '未选牌';
+  const getDunLabel = (evalResult: DunEvaluation, cards: Card[], targetCount: number, isHead = false) => {
+    if (cards.length === 0) return `[需${targetCount}张] 未选牌`;
+    if (cards.length !== targetCount) {
+      return `[需${targetCount}张] 当前已放入 ${cards.length} 张`;
+    }
 
     const rankLabels = cards.map((c) => c.label);
     if (evalResult.type === 'ONE_PAIR') {
       const pairRank = evalResult.primaryRanks[0];
       const pairLabel = cards.find((c) => c.rank === pairRank)?.label || '';
       const singles = cards.filter((c) => c.rank !== pairRank).map((c) => c.label).join(' ');
-      return `[对子 (一对)] 对 ${pairLabel} ${singles ? `(单张 ${singles})` : ''}`;
+      return `[对子] 对 ${pairLabel} ${singles ? `(单张 ${singles})` : ''}`;
     }
     if (evalResult.type === 'FLUSH') {
       const topRank = evalResult.primaryRanks[0];
       const topLabel = cards.find((c) => c.rank === topRank)?.label || '';
-      return `[同花 (五张同色)] 同花 (${cards[0]?.suitSymbol || ''} ${topLabel}高)`;
+      return `[同花] 同花 (${cards[0]?.suitSymbol || ''} ${topLabel}高)`;
     }
     if (evalResult.type === 'FULL_HOUSE') {
       const tripRank = evalResult.primaryRanks[0];
       const pairRank = evalResult.primaryRanks[1];
       const tripLabel = cards.find((c) => c.rank === tripRank)?.label || '';
       const pairLabel = cards.find((c) => c.rank === pairRank)?.label || '';
-      return `[葫芦 (三带二)] 葫芦 (${tripLabel}带${pairLabel})`;
+      return `[葫芦] 葫芦 (${tripLabel}带${pairLabel})`;
     }
     if (evalResult.type === 'STRAIGHT') {
       const topRank = evalResult.primaryRanks[0];
       const topLabel = cards.find((c) => c.rank === topRank)?.label || '';
-      return `[顺子 (五张连续)] 顺子 (${topLabel}高)`;
+      return `[顺子] 顺子 (${topLabel}高)`;
     }
     if (evalResult.type === 'THREE_OF_A_KIND') {
       const tripRank = evalResult.primaryRanks[0];
       const tripLabel = cards.find((c) => c.rank === tripRank)?.label || '';
-      return `[三条 (三张同点)] 冲三 (${tripLabel}条)`;
+      return `[三条] 冲三 (${tripLabel}条)`;
     }
     if (evalResult.type === 'TWO_PAIRS') {
       const p1 = cards.find((c) => c.rank === evalResult.primaryRanks[0])?.label || '';
       const p2 = cards.find((c) => c.rank === evalResult.primaryRanks[1])?.label || '';
-      return `[两对 (双对子)] 两对 (${p1}和${p2})`;
+      return `[两对] 两对 (${p1}和${p2})`;
     }
     if (evalResult.type === 'FOUR_OF_A_KIND') {
       const quadRank = evalResult.primaryRanks[0];
       const quadLabel = cards.find((c) => c.rank === quadRank)?.label || '';
-      return `[铁支 (四张同点)] 铁支 (${quadLabel})`;
+      return `[铁支] 铁支 (${quadLabel})`;
     }
     if (evalResult.type === 'STRAIGHT_FLUSH') {
-      return `[同花顺 (五张同花顺)] 同花顺 (${cards[0]?.suitSymbol || ''})`;
+      return `[同花顺] 同花顺 (${cards[0]?.suitSymbol || ''})`;
     }
     return `[${evalResult.typeName}] ${rankLabels[0] || ''}高`;
   };
+
+  // Find leading player for active showdown dun
+  const getLeadingPlayerForDun = (dunKey: 'head' | 'middle' | 'tail'): string => {
+    if (activeParticipants.length === 0) return '';
+    let leaderId = activeParticipants[0].id;
+    let leaderEval = evaluateDun(activeParticipants[0].arrangement[dunKey], dunKey === 'head');
+
+    for (let i = 1; i < activeParticipants.length; i++) {
+      const currEval = evaluateDun(activeParticipants[i].arrangement[dunKey], dunKey === 'head');
+      if (compareDuns(currEval, leaderEval) > 0) {
+        leaderEval = currEval;
+        leaderId = activeParticipants[i].id;
+      }
+    }
+    return leaderId;
+  };
+
+  const isShowdownPhase =
+    phase === 'SHOWDOWN_HEAD' ||
+    phase === 'SHOWDOWN_MID' ||
+    phase === 'SHOWDOWN_TAIL' ||
+    phase === 'ROUND_RESULT';
 
   return (
     <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#0B1120] text-slate-100 flex flex-col font-sans select-none relative overflow-hidden justify-between">
@@ -769,7 +902,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
         {/* Right: Player Count Badge (e.g. 8/8 或 4/4) + Gold Chips + Chat Button */}
         <div className="flex items-center gap-2">
-          {/* Player Count Badge (Replaces old WiFi icon) */}
+          {/* Player Count Badge */}
           <div
             onClick={() => setShowPlayersModal(true)}
             className="px-2 py-0.5 rounded-full bg-slate-800/90 border border-slate-700 hover:border-amber-400/60 text-slate-200 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95"
@@ -785,7 +918,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             <span>{currentUser.chips.toLocaleString()}</span>
           </div>
 
-          {/* Purple Chat Button (Opens integrated chat drawer) */}
+          {/* Purple Chat Button */}
           <button
             onClick={() => setShowChatDrawer(true)}
             className="w-8 h-8 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center cursor-pointer transition-colors shadow-md active:scale-95"
@@ -796,7 +929,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       </header>
 
-      {/* Reconnect & Alert Banner (紧凑单行，绝不增加垂直高度) */}
+      {/* Reconnect & Alert Banner */}
       {reconnectTip && (
         <div className="px-3 py-1 bg-gradient-to-r from-indigo-900/90 to-slate-900/90 border-b border-indigo-500/50 text-indigo-200 text-[11px] font-medium flex items-center justify-between gap-2 z-30 shrink-0">
           <div className="flex items-center gap-1.5 truncate">
@@ -808,9 +941,8 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* 2. CHAT & MESSAGE BANNER WITH LEFT "查看玩家" BUTTON (Replaces old avatar banner) */}
+      {/* 2. LIVE STATUS BANNER: 查看玩家 + 文字/短语横幅 */}
       <div className="px-2.5 py-1 bg-[#090E1A] border-b border-slate-800/80 flex items-center justify-between gap-2 z-20 shrink-0">
-        {/* Left: 查看玩家 button */}
         <button
           onClick={() => setShowPlayersModal(true)}
           className="px-2.5 py-1 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0 shadow-xs"
@@ -820,7 +952,6 @@ export const GameTable: React.FC<GameTableProps> = ({
           <span>查看玩家</span>
         </button>
 
-        {/* Right: Live Chat / Quick Phrase Display Area */}
         <div
           onClick={() => setShowChatDrawer(true)}
           className="flex-1 bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1 flex items-center gap-2 overflow-hidden cursor-pointer hover:border-slate-700 transition-colors"
@@ -833,14 +964,67 @@ export const GameTable: React.FC<GameTableProps> = ({
             {latestChatMessage?.text || '点击右侧短语/语音进行互动交流...'}
           </span>
           <span className="text-[10px] text-slate-500 font-mono shrink-0">
-            {countdown}s
+            {phase === 'ARRANGING' ? `${countdown}s` : '比牌中'}
           </span>
         </div>
       </div>
 
-      {/* 3. MAIN TABLE BODY: ENLARGED DUN SECTIONS (前墩 / 中墩 / 后墩) 绝对不允许滚动 */}
+      {/* Manual Arranging Error Toast */}
+      {arrangeError && (
+        <div className="mx-2 my-1 px-3 py-1.5 bg-rose-950/90 border border-rose-500/60 text-rose-200 text-xs rounded-xl flex items-center justify-between gap-2 z-40 animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-1.5 truncate">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span className="truncate">{arrangeError}</span>
+          </div>
+          <button onClick={() => setArrangeError(null)} className="text-slate-400 hover:text-white p-0.5">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Floating Multi-Selection Action Toolbar */}
+      {phase === 'ARRANGING' && selectedCardIds.length > 0 && (
+        <div className="mx-2 my-0.5 px-3 py-1.5 bg-gradient-to-r from-amber-950/95 via-slate-900/95 to-amber-950/95 border-2 border-amber-400/80 rounded-2xl shadow-xl flex items-center justify-between gap-1.5 z-40 animate-in zoom-in-95">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+            <span className="text-xs font-bold text-amber-300">
+              已选 <strong className="text-white text-sm font-mono">{selectedCardIds.length}</strong> 张牌
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => handleMoveSelectedToDun('head')}
+              className="px-2 py-1 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-lg cursor-pointer transition-all active:scale-95 shadow-xs"
+            >
+              移入前墩
+            </button>
+            <button
+              onClick={() => handleMoveSelectedToDun('mid')}
+              className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg cursor-pointer transition-all active:scale-95 shadow-xs"
+            >
+              移入中墩
+            </button>
+            <button
+              onClick={() => handleMoveSelectedToDun('tail')}
+              className="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-lg cursor-pointer transition-all active:scale-95 shadow-xs"
+            >
+              移入后墩
+            </button>
+            <button
+              onClick={() => setSelectedCardIds([])}
+              className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+              title="取消多选"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. MAIN TABLE BODY: EITHER ARRANGE BOARD OR SHOWDOWN ARENA */}
       <main className="flex-1 max-w-lg mx-auto w-full px-2 py-1 flex flex-col justify-between gap-1 overflow-hidden">
-        {/* Floating Voice & Text Speech Bubbles (Click to Play Voice Audio) */}
+        {/* Floating Voice & Text Speech Bubbles */}
         {speechBubbles.map((b) => {
           const isVoice = b.type === 'voice';
           const isPlaying = playingBubbleId === b.id;
@@ -876,188 +1060,639 @@ export const GameTable: React.FC<GameTableProps> = ({
           );
         })}
 
-        {/* SECTION 1: 前墩 (Head Dun 3/3) */}
-        <div className="bg-[#0F172A]/95 border border-slate-800/90 rounded-xl p-1.5 sm:p-2 shadow-md flex flex-col justify-between flex-1 overflow-hidden">
-          {/* Section Header */}
-          <div className="flex items-center justify-between text-xs shrink-0 mb-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-sky-400 shadow-xs shadow-sky-400/50" />
-              <span className="font-bold text-slate-100 text-xs">前墩</span>
-              <span className="px-1.5 py-0.1 rounded bg-sky-500/20 text-sky-300 text-[10px] font-mono font-bold">
-                {headCards.length}/3
-              </span>
-            </div>
-            <div className="text-sky-400 text-xs font-bold font-mono truncate max-w-[220px]">
-              {getDunLabel(headEval, headCards, true)}
-            </div>
-          </div>
-
-          {/* Playing Cards Row */}
-          <div className="flex items-center justify-start pl-1 flex-1 overflow-visible">
-            <div className="flex -space-x-7 sm:-space-x-5">
-              {headCards.map((card) => (
-                <div
-                  key={card.id}
-                  className="transition-transform hover:-translate-y-1.5 duration-150 drop-shadow-md"
-                >
-                  <CardItem card={card} size="md" />
+        {/* ========================================================= */}
+        {/* VIEW A: MANUAL ARRANGING PHASE (前墩 / 中墩 / 后墩) */}
+        {/* ========================================================= */}
+        {!isShowdownPhase && (
+          <>
+            {/* DUN 1: 前墩 (Target: 3 cards) */}
+            <div
+              onClick={() => {
+                if (selectedCardIds.length > 0) handleMoveSelectedToDun('head');
+              }}
+              className={`bg-[#0F172A]/95 border rounded-xl p-1.5 sm:p-2 shadow-md flex flex-col justify-between flex-1 overflow-hidden transition-all ${
+                selectedCardIds.length > 0
+                  ? 'border-sky-500/70 hover:border-sky-400 cursor-pointer ring-1 ring-sky-500/30'
+                  : 'border-slate-800/90'
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between text-xs shrink-0 mb-0.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-sky-400 shadow-xs shadow-sky-400/50" />
+                  <span className="font-bold text-slate-100 text-xs">前墩</span>
+                  <span
+                    className={`px-1.5 py-0.1 rounded text-[10px] font-mono font-bold border ${
+                      headCards.length === 3
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    }`}
+                  >
+                    {headCards.length}/3 {headCards.length === 3 ? '✓' : ''}
+                  </span>
+                  {selectedCardIds.length > 0 && (
+                    <span className="text-[10px] text-sky-400 font-semibold animate-pulse">
+                      点击移入此墩
+                    </span>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* SECTION 2: 中墩 (Middle Dun 5/5) */}
-        <div className="bg-[#0F172A]/95 border border-slate-800/90 rounded-xl p-1.5 sm:p-2 shadow-md flex flex-col justify-between flex-1 overflow-hidden">
-          {/* Section Header */}
-          <div className="flex items-center justify-between text-xs shrink-0 mb-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-sky-400 shadow-xs shadow-sky-400/50" />
-              <span className="font-bold text-slate-100 text-xs">中墩</span>
-              <span className="px-1.5 py-0.1 rounded bg-sky-500/20 text-sky-300 text-[10px] font-mono font-bold">
-                {midCards.length}/5
-              </span>
-            </div>
-            <div className="text-sky-400 text-xs font-bold font-mono truncate max-w-[220px]">
-              {getDunLabel(midEval, midCards, false)}
-            </div>
-          </div>
-
-          {/* Playing Cards Row */}
-          <div className="flex items-center justify-start pl-1 flex-1 overflow-visible">
-            <div className="flex -space-x-8 sm:-space-x-6">
-              {midCards.map((card) => (
-                <div
-                  key={card.id}
-                  className="transition-transform hover:-translate-y-1.5 duration-150 drop-shadow-md"
-                >
-                  <CardItem card={card} size="md" />
+                <div className="text-sky-400 text-xs font-bold font-mono truncate max-w-[210px]">
+                  {getDunLabel(headEval, headCards, 3, true)}
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* SECTION 3: 后墩 (Tail Dun 5/5) */}
-        <div className="bg-[#0F172A]/95 border border-slate-800/90 rounded-xl p-1.5 sm:p-2 shadow-md flex flex-col justify-between flex-1 overflow-hidden">
-          {/* Section Header */}
-          <div className="flex items-center justify-between text-xs shrink-0 mb-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-purple-400 shadow-xs shadow-purple-400/50" />
-              <span className="font-bold text-slate-100 text-xs">后墩</span>
-              <span className="px-1.5 py-0.1 rounded bg-purple-500/20 text-purple-300 text-[10px] font-mono font-bold">
-                {tailCards.length}/5
-              </span>
-            </div>
-            <div className="text-purple-400 text-xs font-bold font-mono truncate max-w-[220px]">
-              {getDunLabel(tailEval, tailCards, false)}
-            </div>
-          </div>
-
-          {/* Playing Cards Row */}
-          <div className="flex items-center justify-start pl-1 flex-1 overflow-visible">
-            <div className="flex -space-x-8 sm:-space-x-6">
-              {tailCards.map((card) => (
-                <div
-                  key={card.id}
-                  className="transition-transform hover:-translate-y-1.5 duration-150 drop-shadow-md"
-                >
-                  <CardItem card={card} size="md" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Settlement Showdown Results Overlay (if finished) */}
-        {phase === 'ROUND_RESULT' && settlement && (
-          <div className="absolute inset-x-3 top-14 z-50 p-4 bg-slate-900/95 border-2 border-amber-500/70 rounded-2xl shadow-2xl space-y-2.5 animate-in zoom-in-95 backdrop-blur-sm">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <div className="flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-amber-400" />
-                <span className="font-bold text-sm text-white">本局比牌结算</span>
               </div>
-              <span className="text-xs font-mono font-bold text-amber-400">
-                {settlement.scores['player_me'] > 0
-                  ? `+${settlement.scores['player_me']} 水 获胜！🎉`
-                  : `${settlement.scores['player_me']} 水`}
-              </span>
+
+              {/* Cards Container */}
+              <div className="flex items-center justify-start pl-1 flex-1 overflow-x-auto scrollbar-none">
+                {headCards.length === 0 ? (
+                  <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-slate-700/60 rounded-xl text-slate-500 text-xs">
+                    + 点击将选中的牌移入前墩 (需3张)
+                  </div>
+                ) : (
+                  <div className="flex -space-x-7 sm:-space-x-5 py-1">
+                    {headCards.map((card) => {
+                      const isSel = selectedCardIds.includes(card.id);
+                      return (
+                        <div
+                          key={card.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCardClick(card);
+                          }}
+                          className={`transition-all duration-150 drop-shadow-md cursor-pointer ${
+                            isSel ? '-translate-y-3.5 z-20' : 'hover:-translate-y-1'
+                          }`}
+                        >
+                          <div className="relative">
+                            <CardItem card={card} size="md" selected={isSel} />
+                            {isSel && (
+                              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-md">
+                                <Check className="w-3 h-3 stroke-[3]" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className={`grid ${is8Players ? 'grid-cols-4' : 'grid-cols-4'} gap-1.5 text-center text-xs`}>
-              {players.slice(0, activePlayerCount).map((p) => {
-                const s = settlement.scores[p.id] || 0;
-                return (
-                  <div key={p.id} className="p-1.5 bg-slate-950 border border-slate-800 rounded-xl">
-                    <div className="font-semibold text-slate-200 text-[11px] truncate">{p.name}</div>
-                    <div
-                      className={`font-mono font-bold text-xs mt-0.5 ${
-                        s > 0 ? 'text-emerald-400' : s < 0 ? 'text-rose-400' : 'text-slate-400'
-                      }`}
-                    >
-                      {s > 0 ? `+${s}` : s}
+            {/* DUN 2: 中墩 (Target: 5 cards) */}
+            <div
+              onClick={() => {
+                if (selectedCardIds.length > 0) handleMoveSelectedToDun('mid');
+              }}
+              className={`bg-[#0F172A]/95 border rounded-xl p-1.5 sm:p-2 shadow-md flex flex-col justify-between flex-1 overflow-hidden transition-all ${
+                selectedCardIds.length > 0
+                  ? 'border-blue-500/70 hover:border-blue-400 cursor-pointer ring-1 ring-blue-500/30'
+                  : 'border-slate-800/90'
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between text-xs shrink-0 mb-0.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-400 shadow-xs shadow-blue-400/50" />
+                  <span className="font-bold text-slate-100 text-xs">中墩</span>
+                  <span
+                    className={`px-1.5 py-0.1 rounded text-[10px] font-mono font-bold border ${
+                      midCards.length === 5
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    }`}
+                  >
+                    {midCards.length}/5 {midCards.length === 5 ? '✓' : ''}
+                  </span>
+                  {selectedCardIds.length > 0 && (
+                    <span className="text-[10px] text-blue-400 font-semibold animate-pulse">
+                      点击移入此墩
+                    </span>
+                  )}
+                </div>
+                <div className="text-blue-400 text-xs font-bold font-mono truncate max-w-[210px]">
+                  {getDunLabel(midEval, midCards, 5, false)}
+                </div>
+              </div>
+
+              {/* Cards Container */}
+              <div className="flex items-center justify-start pl-1 flex-1 overflow-x-auto scrollbar-none">
+                {midCards.length === 0 ? (
+                  <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-slate-700/60 rounded-xl text-slate-500 text-xs">
+                    + 点击将选中的牌移入中墩 (需5张)
+                  </div>
+                ) : (
+                  <div className="flex -space-x-8 sm:-space-x-6 py-1">
+                    {midCards.map((card) => {
+                      const isSel = selectedCardIds.includes(card.id);
+                      return (
+                        <div
+                          key={card.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCardClick(card);
+                          }}
+                          className={`transition-all duration-150 drop-shadow-md cursor-pointer ${
+                            isSel ? '-translate-y-3.5 z-20' : 'hover:-translate-y-1'
+                          }`}
+                        >
+                          <div className="relative">
+                            <CardItem card={card} size="md" selected={isSel} />
+                            {isSel && (
+                              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-md">
+                                <Check className="w-3 h-3 stroke-[3]" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* DUN 3: 后墩 (Target: 5 cards) */}
+            <div
+              onClick={() => {
+                if (selectedCardIds.length > 0) handleMoveSelectedToDun('tail');
+              }}
+              className={`bg-[#0F172A]/95 border rounded-xl p-1.5 sm:p-2 shadow-md flex flex-col justify-between flex-1 overflow-hidden transition-all ${
+                selectedCardIds.length > 0
+                  ? 'border-purple-500/70 hover:border-purple-400 cursor-pointer ring-1 ring-purple-500/30'
+                  : 'border-slate-800/90'
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between text-xs shrink-0 mb-0.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-400 shadow-xs shadow-purple-400/50" />
+                  <span className="font-bold text-slate-100 text-xs">后墩</span>
+                  <span
+                    className={`px-1.5 py-0.1 rounded text-[10px] font-mono font-bold border ${
+                      tailCards.length === 5
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    }`}
+                  >
+                    {tailCards.length}/5 {tailCards.length === 5 ? '✓' : ''}
+                  </span>
+                  {selectedCardIds.length > 0 && (
+                    <span className="text-[10px] text-purple-400 font-semibold animate-pulse">
+                      点击移入此墩
+                    </span>
+                  )}
+                </div>
+                <div className="text-purple-400 text-xs font-bold font-mono truncate max-w-[210px]">
+                  {getDunLabel(tailEval, tailCards, 5, false)}
+                </div>
+              </div>
+
+              {/* Cards Container */}
+              <div className="flex items-center justify-start pl-1 flex-1 overflow-x-auto scrollbar-none">
+                {tailCards.length === 0 ? (
+                  <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-slate-700/60 rounded-xl text-slate-500 text-xs">
+                    + 点击将选中的牌移入后墩 (需5张)
+                  </div>
+                ) : (
+                  <div className="flex -space-x-8 sm:-space-x-6 py-1">
+                    {tailCards.map((card) => {
+                      const isSel = selectedCardIds.includes(card.id);
+                      return (
+                        <div
+                          key={card.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCardClick(card);
+                          }}
+                          className={`transition-all duration-150 drop-shadow-md cursor-pointer ${
+                            isSel ? '-translate-y-3.5 z-20' : 'hover:-translate-y-1'
+                          }`}
+                        >
+                          <div className="relative">
+                            <CardItem card={card} size="md" selected={isSel} />
+                            {isSel && (
+                              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-md">
+                                <Check className="w-3 h-3 stroke-[3]" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ========================================================= */}
+        {/* VIEW B: REFINED SHOWDOWN ARENA (比牌对决与结算界面) */}
+        {/* ========================================================= */}
+        {isShowdownPhase && (
+          <div className="flex-1 flex flex-col justify-between gap-1 overflow-hidden bg-[#0A0F1D] border border-amber-500/40 rounded-2xl p-2 shadow-2xl relative">
+            {/* Showdown Step Progress Bar */}
+            <div className="flex items-center justify-between gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 shrink-0">
+              <div
+                className={`flex-1 py-1 rounded-lg text-center text-[11px] font-bold transition-all ${
+                  phase === 'SHOWDOWN_HEAD'
+                    ? 'bg-sky-500 text-slate-950 ring-2 ring-sky-400 shadow-md'
+                    : 'bg-slate-900 text-slate-400'
+                }`}
+              >
+                1. 前墩比牌
+              </div>
+              <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
+              <div
+                className={`flex-1 py-1 rounded-lg text-center text-[11px] font-bold transition-all ${
+                  phase === 'SHOWDOWN_MID'
+                    ? 'bg-blue-500 text-white ring-2 ring-blue-400 shadow-md'
+                    : 'bg-slate-900 text-slate-400'
+                }`}
+              >
+                2. 中墩比牌
+              </div>
+              <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
+              <div
+                className={`flex-1 py-1 rounded-lg text-center text-[11px] font-bold transition-all ${
+                  phase === 'SHOWDOWN_TAIL'
+                    ? 'bg-purple-500 text-white ring-2 ring-purple-400 shadow-md'
+                    : 'bg-slate-900 text-slate-400'
+                }`}
+              >
+                3. 后墩比牌
+              </div>
+              <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
+              <div
+                className={`flex-1 py-1 rounded-lg text-center text-[11px] font-bold transition-all ${
+                  phase === 'ROUND_RESULT'
+                    ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300 font-extrabold shadow-md'
+                    : 'bg-slate-900 text-slate-400'
+                }`}
+              >
+                4. 总结算
+              </div>
+
+              {phase !== 'ROUND_RESULT' && (
+                <button
+                  onClick={handleSkipShowdown}
+                  className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] flex items-center gap-0.5 cursor-pointer shrink-0 ml-1"
+                  title="跳过比牌动画直接看结算"
+                >
+                  <FastForward className="w-3 h-3 text-amber-400" />
+                  <span>跳过</span>
+                </button>
+              )}
+            </div>
+
+            {/* Active Dun Showdown Duel Cards */}
+            {phase !== 'ROUND_RESULT' && (
+              <div className="flex-1 flex flex-col justify-around py-1 overflow-y-auto scrollbar-none">
+                <div className="text-center font-bold text-xs text-amber-300 flex items-center justify-center gap-1.5 py-0.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>
+                    {phase === 'SHOWDOWN_HEAD' && '【第一轮：前墩比牌 · 各家亮出前三张】'}
+                    {phase === 'SHOWDOWN_MID' && '【第二轮：中墩比牌 · 各家亮出中五张】'}
+                    {phase === 'SHOWDOWN_TAIL' && '【第三轮：后墩决胜 · 决战最后底牌五张】'}
+                  </span>
+                </div>
+
+                {/* Grid of All Active Players for the current Dun */}
+                <div className={`grid ${is8Players ? 'grid-cols-2' : 'grid-cols-2'} gap-1.5`}>
+                  {activeParticipants.map((p) => {
+                    const isMe = p.id === 'player_me';
+                    const dunKey =
+                      phase === 'SHOWDOWN_HEAD'
+                        ? 'head'
+                        : phase === 'SHOWDOWN_MID'
+                        ? 'middle'
+                        : 'tail';
+                    const dunCards = p.arrangement[dunKey] || [];
+                    const evalRes = evaluateDun(dunCards, dunKey === 'head');
+                    const leadingId = getLeadingPlayerForDun(dunKey);
+                    const isLeader = leadingId === p.id;
+
+                    return (
+                      <div
+                        key={p.id}
+                        className={`p-1.5 rounded-xl border flex flex-col justify-between transition-all ${
+                          isLeader
+                            ? 'bg-amber-500/15 border-amber-400 shadow-md shadow-amber-500/20'
+                            : isMe
+                            ? 'bg-slate-900/90 border-slate-700'
+                            : 'bg-slate-950/80 border-slate-800'
+                        }`}
+                      >
+                        {/* Player Header */}
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <div className="flex items-center gap-1 truncate">
+                            <span className="text-base">{p.avatar}</span>
+                            <span className={`font-bold truncate text-[11px] ${isMe ? 'text-amber-300' : 'text-slate-200'}`}>
+                              {p.name}
+                            </span>
+                          </div>
+                          {isLeader && (
+                            <span className="px-1 py-0.2 rounded bg-amber-400 text-slate-950 text-[10px] font-extrabold flex items-center gap-0.5 shrink-0 shadow-xs">
+                              <Crown className="w-2.5 h-2.5 fill-current" />
+                              <span>头名</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Player's Dun Cards */}
+                        <div className="flex items-center justify-center -space-x-7 py-0.5">
+                          {dunCards.map((c) => (
+                            <div key={c.id} className="drop-shadow-md">
+                              <CardItem card={c} size="sm" />
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Hand Type Label */}
+                        <div
+                          className={`text-center font-bold text-[10px] truncate mt-0.5 px-1 py-0.2 rounded ${
+                            isLeader
+                              ? 'text-amber-300 bg-amber-500/20'
+                              : 'text-slate-300 bg-slate-900'
+                          }`}
+                        >
+                          {evalRes.typeName}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ROUND_RESULT: Full Showdown Results & Detailed Ledger */}
+            {phase === 'ROUND_RESULT' && settlement && (
+              <div className="flex-1 flex flex-col justify-between gap-1 overflow-hidden animate-in zoom-in-95">
+                {/* Result Title & Special Event Announcements */}
+                <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-2 shrink-0">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Trophy className="w-4 h-4 text-amber-400" />
+                      <span className="font-bold text-xs text-white">本局比牌结算结果</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs font-mono font-extrabold ${
+                          (settlement.scores['player_me'] || 0) > 0
+                            ? 'text-emerald-400'
+                            : 'text-rose-400'
+                        }`}
+                      >
+                        {(settlement.scores['player_me'] || 0) > 0
+                          ? `+${settlement.scores['player_me']} 水 获胜！🎉`
+                          : `${settlement.scores['player_me']} 水`}
+                      </span>
+
+                      {/* Tab toggles */}
+                      <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                        <button
+                          onClick={() => setSettlementTab('all_duns')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                            settlementTab === 'all_duns'
+                              ? 'bg-amber-400 text-slate-950'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          三墩全览
+                        </button>
+                        <button
+                          onClick={() => setSettlementTab('matches')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                            settlementTab === 'matches'
+                              ? 'bg-amber-400 text-slate-950'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          对战明细
+                        </button>
+                      </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
 
-            <button
-              onClick={startNewRound}
-              className="w-full py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow cursor-pointer active:scale-95"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>再战一局</span>
-            </button>
+                  {/* Gunshot / Grand Slam Announcements */}
+                  {settlement.grandSlamPlayerId && (
+                    <div className="mt-1 px-2 py-1 bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border border-amber-500/50 rounded-lg text-amber-300 font-extrabold text-[11px] flex items-center justify-center gap-1 animate-pulse">
+                      <Crown className="w-3.5 h-3.5 text-amber-400 fill-current" />
+                      <span>👑 【全垒打】玩家 [{settlement.grandSlamPlayerName}] 通杀全场！分数翻倍！</span>
+                    </div>
+                  )}
+
+                  {settlement.gunShots && settlement.gunShots.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {settlement.gunShots.map((g, idx) => (
+                        <div
+                          key={idx}
+                          className="px-2 py-0.5 bg-rose-950/80 border border-rose-500/50 rounded-md text-[10px] text-rose-300 font-bold flex items-center gap-1"
+                        >
+                          <span>🔫 打枪：</span>
+                          <span className="text-white">[{g.shooterName}]</span>
+                          <span>➔</span>
+                          <span className="text-rose-200">[{g.targetName}]</span>
+                          <span className="text-amber-400 font-mono">(×2翻倍)</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Tab 1: All Players' 3 Duns Overview */}
+                {settlementTab === 'all_duns' && (
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-1.5 scrollbar-none">
+                    {activeParticipants.map((p) => {
+                      const netScore = settlement.scores[p.id] || 0;
+                      const isMe = p.id === 'player_me';
+                      const hEval = evaluateDun(p.arrangement.head, true);
+                      const mEval = evaluateDun(p.arrangement.middle, false);
+                      const tEval = evaluateDun(p.arrangement.tail, false);
+
+                      return (
+                        <div
+                          key={p.id}
+                          className={`p-1.5 rounded-xl border transition-all ${
+                            isMe
+                              ? 'bg-amber-500/10 border-amber-400/60'
+                              : 'bg-slate-900/90 border-slate-800'
+                          }`}
+                        >
+                          {/* Row Header */}
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm">{p.avatar}</span>
+                              <span className={`font-bold ${isMe ? 'text-amber-300' : 'text-slate-200'}`}>
+                                {p.name}
+                              </span>
+                              {p.arrangement.isDaoPai && (
+                                <span className="px-1 py-0.2 rounded bg-rose-500 text-white text-[9px] font-bold">
+                                  倒牌违规
+                                </span>
+                              )}
+                            </div>
+                            <span
+                              className={`font-mono font-extrabold text-xs ${
+                                netScore > 0 ? 'text-emerald-400' : netScore < 0 ? 'text-rose-400' : 'text-slate-400'
+                              }`}
+                            >
+                              {netScore > 0 ? `+${netScore} 水` : `${netScore} 水`}
+                            </span>
+                          </div>
+
+                          {/* 3 Duns Card Rows in compact strip */}
+                          <div className="grid grid-cols-3 gap-1">
+                            {/* Head */}
+                            <div className="bg-slate-950/80 p-1 rounded-lg border border-slate-800 flex flex-col items-center">
+                              <div className="text-[9px] font-bold text-sky-400 truncate w-full text-center">
+                                前: {hEval.typeName}
+                              </div>
+                              <div className="flex -space-x-7 py-0.5">
+                                {p.arrangement.head.map((c) => (
+                                  <CardItem key={c.id} card={c} size="sm" />
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Middle */}
+                            <div className="bg-slate-950/80 p-1 rounded-lg border border-slate-800 flex flex-col items-center">
+                              <div className="text-[9px] font-bold text-blue-400 truncate w-full text-center">
+                                中: {mEval.typeName}
+                              </div>
+                              <div className="flex -space-x-7 py-0.5">
+                                {p.arrangement.middle.map((c) => (
+                                  <CardItem key={c.id} card={c} size="sm" />
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Tail */}
+                            <div className="bg-slate-950/80 p-1 rounded-lg border border-slate-800 flex flex-col items-center">
+                              <div className="text-[9px] font-bold text-purple-400 truncate w-full text-center">
+                                后: {tEval.typeName}
+                              </div>
+                              <div className="flex -space-x-7 py-0.5">
+                                {p.arrangement.tail.map((c) => (
+                                  <CardItem key={c.id} card={c} size="sm" />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Tab 2: Pairwise Matchup Ledger */}
+                {settlementTab === 'matches' && (
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-1.5 scrollbar-none">
+                    {settlement.pairMatches.map((m, idx) => {
+                      const p1 = players.find((p) => p.id === m.p1Id);
+                      const p2 = players.find((p) => p.id === m.p2Id);
+                      const isMeMatch = m.p1Id === 'player_me' || m.p2Id === 'player_me';
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-2 rounded-xl border flex items-center justify-between text-xs ${
+                            isMeMatch
+                              ? 'bg-indigo-950/40 border-indigo-500/50'
+                              : 'bg-slate-900/80 border-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-[90px]">
+                            <span>{p1?.avatar}</span>
+                            <span className="font-bold text-slate-200 truncate">{p1?.name}</span>
+                          </div>
+
+                          <div className="flex flex-col items-center gap-0.5">
+                            <div className="flex items-center gap-1 text-[10px] font-bold">
+                              <span className={m.headWinner === m.p1Id ? 'text-emerald-400' : 'text-slate-500'}>前</span>
+                              <span>·</span>
+                              <span className={m.middleWinner === m.p1Id ? 'text-emerald-400' : 'text-slate-500'}>中</span>
+                              <span>·</span>
+                              <span className={m.tailWinner === m.p1Id ? 'text-emerald-400' : 'text-slate-500'}>后</span>
+                            </div>
+                            {m.isGunShot && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-rose-600/40 text-rose-300 font-bold">
+                                🔫 打枪
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 min-w-[90px] justify-end">
+                            <span className="font-bold text-slate-200 truncate">{p2?.name}</span>
+                            <span>{p2?.avatar}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Restart Button */}
+                <button
+                  onClick={startNewRound}
+                  className="w-full py-2.5 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-extrabold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 cursor-pointer active:scale-95 shrink-0"
+                >
+                  <RotateCcw className="w-4 h-4 stroke-[2.5]" />
+                  <span>再战一局 (开始第 {roundNumber + 1} 局)</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </main>
 
       {/* 4. CLEAN BOTTOM ACTIONS (DUAL BUTTONS + AUTO HOSTING TOGGLE) */}
-      <footer className="w-full max-w-lg mx-auto p-2 bg-[#0F172A] border-t border-slate-800/80 flex items-center gap-2 z-30 shrink-0 shadow-lg">
-        {/* Button 0: 自动理牌 / 托管切换 */}
-        <button
-          type="button"
-          onClick={() => {
-            const nextHosting = !isHosting;
-            setIsHosting(nextHosting);
-            if (nextHosting) {
-              handleSendMessage('🤖 我开启了自动托管理牌模式！');
-            }
-          }}
-          className={`py-2.5 px-3 border font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95 shrink-0 ${
-            isHosting
-              ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold ring-2 ring-amber-400/40'
-              : 'bg-[#0B1120] hover:bg-slate-800 border-slate-700 text-slate-300'
-          }`}
-          title={isHosting ? '点击取消托管' : '点击开启自动理牌托管'}
-        >
-          <Bot className={`w-4 h-4 ${isHosting ? 'text-slate-950' : 'text-amber-400'}`} />
-          <span>{isHosting ? '托管中' : '自动理牌'}</span>
-        </button>
+      {!isShowdownPhase && (
+        <footer className="w-full max-w-lg mx-auto p-2 bg-[#0F172A] border-t border-slate-800/80 flex items-center gap-2 z-30 shrink-0 shadow-lg">
+          {/* Button 0: 自动理牌 / 托管切换 */}
+          <button
+            type="button"
+            onClick={() => {
+              const nextHosting = !isHosting;
+              setIsHosting(nextHosting);
+              if (nextHosting) {
+                handleSendMessage('🤖 我开启了自动托管理牌模式！');
+              }
+            }}
+            className={`py-2.5 px-3 border font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95 shrink-0 ${
+              isHosting
+                ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold ring-2 ring-amber-400/40'
+                : 'bg-[#0B1120] hover:bg-slate-800 border-slate-700 text-slate-300'
+            }`}
+            title={isHosting ? '点击取消托管' : '点击开启自动理牌托管'}
+          >
+            <Bot className={`w-4 h-4 ${isHosting ? 'text-slate-950' : 'text-amber-400'}`} />
+            <span>{isHosting ? '托管中' : '自动理牌'}</span>
+          </button>
 
-        {/* Button 1: 变换牌型 (Cycle combinations) */}
-        <button
-          onClick={handleCycleSmartHand}
-          disabled={phase !== 'ARRANGING'}
-          className="flex-1 py-2.5 px-3 bg-[#0B1120] hover:bg-slate-800 border border-amber-500/50 hover:border-amber-400 text-amber-400 font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95 disabled:opacity-50"
-        >
-          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-          <span>变换牌型</span>
-        </button>
+          {/* Button 1: 变换牌型 (Cycle combinations) */}
+          <button
+            onClick={handleCycleSmartHand}
+            className="flex-1 py-2.5 px-3 bg-[#0B1120] hover:bg-slate-800 border border-amber-500/50 hover:border-amber-400 text-amber-400 font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95"
+            title="一键循环切换推荐的最佳牌型"
+          >
+            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>变换牌型</span>
+          </button>
 
-        {/* Button 2: 提交牌型 (13/13) */}
-        <button
-          onClick={handleSubmitHand}
-          disabled={phase !== 'ARRANGING'}
-          className="flex-1 py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50"
-        >
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>提交牌型 (13/13)</span>
-        </button>
-      </footer>
+          {/* Button 2: 提交牌型 (Checks strictly 3/5/5 upon click) */}
+          <button
+            onClick={handleSubmitHand}
+            className="flex-1 py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+          >
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>提交牌型 (3/5/5)</span>
+          </button>
+        </footer>
+      )}
 
-      {/* 5. POPUP MODAL: ALL PLAYERS AVATAR & NAME (点击“查看玩家”或人数弹窗显示) */}
+      {/* 5. POPUP MODAL: ALL PLAYERS AVATAR & NAME */}
       {showPlayersModal && (
         <div
           className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in cursor-pointer"
@@ -1085,7 +1720,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             {/* Players Grid */}
             <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto pr-1">
-              {players.slice(0, activePlayerCount).map((p, idx) => {
+              {activeParticipants.map((p, idx) => {
                 const isMe = p.id === 'player_me';
                 return (
                   <div
@@ -1101,9 +1736,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1">
-                        <span className="font-bold text-xs text-white truncate">
-                          {p.name}
-                        </span>
+                        <span className="font-bold text-xs text-white truncate">{p.name}</span>
                         {isMe && (
                           <span className="text-[10px] px-1 py-0.2 rounded bg-amber-500 text-slate-950 font-bold shrink-0">
                             我
@@ -1119,7 +1752,6 @@ export const GameTable: React.FC<GameTableProps> = ({
               })}
             </div>
 
-            {/* Footer close button */}
             <button
               onClick={() => setShowPlayersModal(false)}
               className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl cursor-pointer transition-colors active:scale-95"
@@ -1130,7 +1762,70 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* 6. ULTRA-COMPACT BOTTOM-SHEET INTERACTIVE CHAT & VOICE RECORDER DRAWER */}
+      {/* 6. POPUP MODAL: DAO-PAI (倒牌) CONFIRMATION MODAL */}
+      {showDaoPaiModal && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setShowDaoPaiModal(false)}
+        >
+          <div
+            className="bg-[#0F172A] border-2 border-amber-500/80 rounded-2xl max-w-sm w-full p-4 shadow-2xl flex flex-col gap-3 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 text-amber-400 border-b border-slate-800 pb-2">
+              <ShieldAlert className="w-5 h-5 text-amber-400" />
+              <span className="font-bold text-sm text-white">检测到牌型倒牌（违规）</span>
+            </div>
+
+            <div className="text-xs text-slate-300 leading-relaxed bg-amber-500/10 border border-amber-500/30 p-2.5 rounded-xl">
+              <p className="font-bold text-amber-300 mb-1">⚠️ 规则提示：</p>
+              <p className="text-slate-200 mb-2">{daoPaiReason}</p>
+              <p className="text-slate-400 text-[11px]">
+                十三水规则规定：前墩牌型不能大于中墩，中墩不能大于后墩。若确认提交倒牌将直接判负并扣除罚水！
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 mt-1">
+              <button
+                onClick={() => {
+                  const best = smartOptions[0];
+                  if (best) {
+                    setHeadCards(best.head);
+                    setMidCards(best.middle);
+                    setTailCards(best.tail);
+                    executeSubmitShowdown(best.head, best.middle, best.tail, false);
+                  } else {
+                    setShowDaoPaiModal(false);
+                  }
+                }}
+                className="w-full py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow cursor-pointer active:scale-95"
+              >
+                <Sparkles className="w-4 h-4 text-slate-950 fill-current" />
+                <span>一键使用智能推荐理牌 (推荐)</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowDaoPaiModal(false)}
+                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  返回调整
+                </button>
+                <button
+                  onClick={() => {
+                    executeSubmitShowdown(headCards, midCards, tailCards, true, daoPaiReason);
+                  }}
+                  className="flex-1 py-2 bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/40 text-rose-300 text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  仍要提交倒牌
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. ULTRA-COMPACT BOTTOM-SHEET INTERACTIVE CHAT & VOICE RECORDER DRAWER */}
       {showChatDrawer && (
         <div
           className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex flex-col justify-end animate-in fade-in cursor-pointer"
@@ -1139,12 +1834,11 @@ export const GameTable: React.FC<GameTableProps> = ({
             setShowChatDrawer(false);
           }}
         >
-          {/* Bottom Sheet Drawer Card */}
           <div
             className="bg-[#0F172A] border-t border-slate-700 rounded-t-3xl max-w-lg mx-auto w-full p-3 shadow-2xl flex flex-col gap-2 cursor-default animate-in slide-in-from-bottom-8"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header: Title + Big Return Button */}
+            {/* Header: Title + Return Button */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
               <div className="flex items-center gap-2">
                 <Smile className="w-4 h-4 text-amber-400" />
@@ -1164,7 +1858,6 @@ export const GameTable: React.FC<GameTableProps> = ({
 
             {/* Row 1: Real Mic Voice Recorder + Sound Toggle + Text Input + Send Button */}
             <div className="flex items-center gap-1.5">
-              {/* Mic voice recording button */}
               {isRecording ? (
                 <button
                   type="button"
@@ -1186,7 +1879,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                 </button>
               )}
 
-              {/* Sound Toggle button */}
               <button
                 type="button"
                 onClick={() => setSoundEnabled(!soundEnabled)}
@@ -1201,7 +1893,6 @@ export const GameTable: React.FC<GameTableProps> = ({
                 <span>{soundEnabled ? '音效开' : '静音'}</span>
               </button>
 
-              {/* Input + Send */}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -1226,7 +1917,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               </form>
             </div>
 
-            {/* Quick Preset Voice Clips (即点即播即发语音) */}
+            {/* Quick Preset Voice Clips */}
             <div className="space-y-1">
               <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
                 <Radio className="w-3 h-3" />
@@ -1250,7 +1941,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               </div>
             </div>
 
-            {/* Row 2: 8 Emojis Bar */}
+            {/* 8 Emojis Bar */}
             <div className="flex items-center justify-between gap-1 px-2 py-0.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
               {EMOJI_OPTIONS.map((em) => (
                 <button
@@ -1267,7 +1958,7 @@ export const GameTable: React.FC<GameTableProps> = ({
               ))}
             </div>
 
-            {/* Row 3: Quick Phrases Grid (2 Columns, perfectly fits on screen) */}
+            {/* Quick Phrases Grid */}
             <div className="grid grid-cols-2 gap-1">
               {QUICK_PHRASES.map((phrase, idx) => (
                 <button

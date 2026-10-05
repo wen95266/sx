@@ -38,6 +38,7 @@ import {
   ReplayPlayerDun
 } from '../utils/authStorage';
 import { triggerHaptic } from '../utils/haptics';
+import { syncRoomStateApi, sendRoomChatApi } from '../utils/realtimeRoomSync';
 import { PointsManagementModal } from './PointsManagementModal';
 import { MatchHistoryModal } from './MatchHistoryModal';
 import {
@@ -325,9 +326,86 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Sound switch
   const [soundEnabled, setSoundEnabled] = useState(true);
 
+  // Realtime Single Room Sync State ("真人优先，缺额人机补位")
+  const [realPlayersCount, setRealPlayersCount] = useState<number>(1);
+
   const is8Players = currentRoom?.maxPlayers === 8;
   const activePlayerCount = is8Players ? 8 : 4;
   const activeParticipants = players.slice(0, activePlayerCount);
+
+  // Realtime Single Room Synchronization Heartbeat
+  useEffect(() => {
+    const roomId = currentRoom?.id || 'room_realtime_4';
+    const maxPlayers = currentRoom?.maxPlayers || 4;
+    const userId = currentUser.id || 'player_me';
+
+    let isMounted = true;
+
+    const doSync = async (action: 'join' | 'leave' | 'submit' | 'heartbeat' = 'heartbeat') => {
+      try {
+        const syncedState = await syncRoomStateApi({
+          roomId,
+          maxPlayers,
+          userId,
+          nickname: currentUser.nickname || '我',
+          avatar: currentUser.avatar || '😎',
+          phone: currentUser.phone,
+          isSubmitted: phase !== 'ARRANGING',
+          arrangement: { head: headCards, middle: midCards, tail: tailCards, isDaoPai: false },
+          action
+        });
+
+        if (!isMounted) return;
+
+        setRealPlayersCount(syncedState.realPlayersCount || 1);
+
+        // Update players seats while keeping local cards & scores intact
+        setPlayers((prev) => {
+          const syncedPlayersMap = new Map(syncedState.players.map((sp) => [sp.seatIndex, sp]));
+          return prev.map((p, idx) => {
+            const sp = syncedPlayersMap.get(idx);
+            if (!sp) return p;
+
+            const isMe = idx === 0 || sp.id === userId;
+            return {
+              ...p,
+              id: isMe ? 'player_me' : sp.id,
+              name: isMe ? currentUser.nickname || '我' : sp.name,
+              avatar: isMe ? currentUser.avatar || '😎' : sp.avatar,
+              isAi: isMe ? false : sp.isAi,
+              isReady: sp.isReady,
+              cards: p.cards,
+              arrangement: isMe
+                ? p.arrangement
+                : (sp.arrangement && sp.arrangement.head?.length === 3 ? sp.arrangement : p.arrangement)
+            };
+          });
+        });
+
+        // Update chat feeds if any
+        if (syncedState.chatBubbles && syncedState.chatBubbles.length > 0) {
+          const latest = syncedState.chatBubbles[syncedState.chatBubbles.length - 1];
+          setLatestChatMessage({ sender: latest.senderName || '在线玩家', text: latest.text || '语音与表情消息' });
+        }
+      } catch (err) {
+        console.warn('[Sync] Heartbeat error:', err);
+      }
+    };
+
+    // Initial Join
+    doSync('join');
+
+    // Interval Heartbeat
+    const timer = setInterval(() => {
+      doSync('heartbeat');
+    }, 1500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+      doSync('leave');
+    };
+  }, [currentRoom, currentUser, phase, headCards, midCards, tailCards]);
 
   // Toggle card selection
   const handleCardClick = (card: Card) => {
@@ -1059,14 +1137,16 @@ export const GameTable: React.FC<GameTableProps> = ({
             <span className="hidden sm:inline">战绩</span>
           </button>
 
-          {/* Player Count Badge */}
+          {/* Player Count Badge (Shows Real Players count & Bots fill) */}
           <div
             onClick={() => setShowPlayersModal(true)}
             className="px-2 py-0.5 rounded-full bg-slate-800/90 border border-slate-700 hover:border-amber-400/60 text-slate-200 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95"
-            title="点击查看所有玩家"
+            title="点击查看真人玩家与人机补位详情"
           >
-            <Users className="w-3 h-3 text-amber-400" />
-            <span>{activePlayerCount}/{is8Players ? '8' : '4'}</span>
+            <Users className="w-3.5 h-3.5 text-amber-400" />
+            <span>
+              {realPlayersCount}真人 {activePlayerCount - realPlayersCount > 0 ? `${activePlayerCount - realPlayersCount}人机` : ''}
+            </span>
           </div>
 
           {/* Gold Chip Pill (Click to open Points Management & Transfer) */}
@@ -1955,8 +2035,15 @@ export const GameTable: React.FC<GameTableProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                        {p.isAi ? '电脑玩家' : '在线玩家'} · 席位{idx + 1}
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                          !p.isAi ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'
+                        }`}>
+                          {!p.isAi ? '🟢 真人玩家' : '🤖 人机补位'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          席位{idx + 1}
+                        </span>
                       </div>
                     </div>
                   </div>

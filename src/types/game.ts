@@ -156,6 +156,7 @@ export interface EmojiReaction {
 export interface SpeechBubble {
   id: string;
   playerId: string;
+  senderName?: string;
   text: string;
   createdAt: number;
   type?: 'text' | 'voice';

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   User,
   ShieldCheck,
@@ -43,6 +43,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [usernameInput, setUsernameInput] = useState(currentUser.username);
   const [selectedAvatar, setSelectedAvatar] = useState(currentUser.avatar);
   const [savedTip, setSavedTip] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setNicknameInput(currentUser.nickname);
+      setUsernameInput(currentUser.username);
+      setSelectedAvatar(currentUser.avatar);
+    }
+  }, [isOpen, currentUser]);
 
   if (!isOpen) return null;
 

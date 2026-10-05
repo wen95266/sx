@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Card,
@@ -25,7 +25,11 @@ import { CardItem } from './CardItem';
 import {
   getStoredUser,
   recordGameResult,
-  UserProfile
+  UserProfile,
+  saveMatchSession,
+  getMatchSession,
+  clearMatchSession,
+  ActiveMatchSession
 } from '../utils/authStorage';
 import {
   ArrowLeft,
@@ -42,7 +46,9 @@ import {
   RotateCcw,
   Trophy,
   Smile,
-  Zap
+  Wifi,
+  WifiOff,
+  RefreshCw
 } from 'lucide-react';
 
 interface GameTableProps {
@@ -72,13 +78,17 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [phase, setPhase] = useState<GamePhase>('ARRANGING');
   const [countdown, setCountdown] = useState(30);
 
+  // Network & Reconnect Status
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [reconnectTip, setReconnectTip] = useState<string | null>(null);
+
   // 8 Player Seats
   const [activeSeatId, setActiveSeatId] = useState('player_me');
   const [players, setPlayers] = useState<Player[]>([
     {
       id: 'player_me',
-      name: '我',
-      avatar: '😎',
+      name: currentUser.nickname || '我',
+      avatar: currentUser.avatar || '😎',
       isAi: false,
       totalScore: 0,
       roundScore: 0,
@@ -296,6 +306,8 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       return {
         ...p,
+        name: idx === 0 ? currentUser.nickname || '我' : p.name,
+        avatar: idx === 0 ? currentUser.avatar || '😎' : p.avatar,
         cards: hand,
         isReady: idx !== 0,
         roundScore: 0,
@@ -313,12 +325,70 @@ export const GameTable: React.FC<GameTableProps> = ({
     setCountdown(30);
     setPhase('ARRANGING');
     setRoundNumber((prev) => prev + 1);
-  }, [soundEnabled, players]);
+  }, [soundEnabled, players, currentUser]);
 
-  // Initial Deal on Mount
+  // Initial Mount: Detect Disconnection & Auto Recover Session
   useEffect(() => {
-    startNewRound();
+    const saved = getMatchSession();
+    if (saved && saved.headCards && saved.headCards.length > 0) {
+      setHeadCards(saved.headCards);
+      setMidCards(saved.midCards);
+      setTailCards(saved.tailCards);
+      setSmartOptions(saved.smartOptions || []);
+      setCurrentOptionIndex(saved.currentOptionIndex || 0);
+      setPlayers(saved.players || players);
+      setPhase(saved.phase || 'ARRANGING');
+      setCountdown(saved.countdown > 0 ? saved.countdown : 15);
+      setRoundNumber(saved.roundNumber || 28);
+      setReconnectTip('⚡ 已自动断线重连，恢复对局界面与牌型！');
+      setTimeout(() => setReconnectTip(null), 3500);
+    } else {
+      startNewRound();
+    }
   }, []);
+
+  // Real-time Match Session Persistence
+  useEffect(() => {
+    if (headCards.length > 0 && phase !== 'GAME_OVER') {
+      const sessionData: ActiveMatchSession = {
+        room: currentRoom,
+        roundNumber,
+        phase,
+        countdown,
+        players,
+        headCards,
+        midCards,
+        tailCards,
+        smartOptions,
+        currentOptionIndex,
+        timestamp: Date.now()
+      };
+      saveMatchSession(sessionData);
+    }
+  }, [headCards, midCards, tailCards, phase, countdown, roundNumber, players, smartOptions, currentOptionIndex, currentRoom]);
+
+  // Online / Offline Network Listener
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setReconnectTip('✓ 网络连接已恢复，实时战局同步中！');
+      if (soundEnabled) SoundEffects.playMessagePop();
+      setTimeout(() => setReconnectTip(null), 3000);
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      setReconnectTip('⚠️ 网络已断开，正在保持战局等待重连...');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [soundEnabled]);
 
   // Timer countdown
   useEffect(() => {
@@ -522,7 +592,10 @@ export const GameTable: React.FC<GameTableProps> = ({
         {/* Left: Back Arrow + Flame Icon + Title */}
         <div className="flex items-center gap-2">
           <button
-            onClick={onBackToLobby}
+            onClick={() => {
+              clearMatchSession();
+              onBackToLobby();
+            }}
             className="w-8 h-8 rounded-full bg-slate-800/90 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer shadow-xs active:scale-95"
             title="返回游戏大厅"
           >
@@ -542,8 +615,13 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         </div>
 
-        {/* Right: Chip Count Pill + Chat Button */}
+        {/* Right: Network Status + Chip Count Pill + Chat Button */}
         <div className="flex items-center gap-2">
+          {/* Network indicator */}
+          <div className={`p-1 rounded-full ${isOnline ? 'text-emerald-400' : 'text-rose-400 animate-pulse'}`} title={isOnline ? '网络在线' : '网络断开'}>
+            {isOnline ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+          </div>
+
           {/* Gold Chip Pill */}
           <div className="px-2.5 py-1 bg-slate-950 border border-amber-500/40 rounded-full flex items-center gap-1.5 text-xs text-amber-400 font-mono font-bold shadow-xs">
             <Coins className="w-3.5 h-3.5" />
@@ -561,8 +639,21 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       </header>
 
+      {/* Reconnect & Alert Banner */}
+      {reconnectTip && (
+        <div className="px-3 py-1.5 bg-gradient-to-r from-indigo-900/90 to-slate-900/90 border-b border-indigo-500/50 text-indigo-200 text-xs font-medium flex items-center justify-between gap-2 z-30 animate-in fade-in">
+          <div className="flex items-center gap-1.5 truncate">
+            <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin shrink-0" />
+            <span className="truncate">{reconnectTip}</span>
+          </div>
+          <button onClick={() => setReconnectTip(null)} className="text-slate-400 hover:text-white p-0.5">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* 2. HORIZONTAL 8 PLAYER SEATS RIBBON */}
-      <div className="px-2.5 py-1.5 bg-[#090E1A] border-b border-slate-800/60 overflow-x-auto scrollbar-none flex items-center gap-1.5 z-20 shrink-0">
+      <div className="px-2.5 py-1 bg-[#090E1A] border-b border-slate-800/60 overflow-x-auto scrollbar-none flex items-center gap-1.5 z-20 shrink-0">
         {players.map((seat) => {
           const isSelected = activeSeatId === seat.id;
           const isMe = seat.id === 'player_me';
@@ -571,7 +662,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             <button
               key={seat.id}
               onClick={() => setActiveSeatId(seat.id)}
-              className={`flex flex-col items-center justify-center min-w-[52px] py-1 px-1.5 rounded-xl border transition-all cursor-pointer ${
+              className={`flex flex-col items-center justify-center min-w-[50px] py-1 px-1 rounded-xl border transition-all cursor-pointer ${
                 isSelected
                   ? 'bg-amber-500/20 border-amber-400 shadow-md shadow-amber-500/20'
                   : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 text-slate-400'
@@ -579,7 +670,7 @@ export const GameTable: React.FC<GameTableProps> = ({
             >
               <div className="text-base leading-tight mb-0.5">{seat.avatar}</div>
               <div
-                className={`text-[10px] font-medium truncate max-w-[46px] ${
+                className={`text-[10px] font-medium truncate max-w-[44px] ${
                   isSelected ? 'text-amber-300 font-bold' : isMe ? 'text-slate-200' : 'text-slate-400'
                 }`}
               >
@@ -590,7 +681,7 @@ export const GameTable: React.FC<GameTableProps> = ({
         })}
       </div>
 
-      {/* 3. MAIN TABLE BODY: THREE COMPACT STACKED DUN SECTIONS (前墩 / 中墩 / 后墩) */}
+      {/* 3. MAIN TABLE BODY: ENLARGED DUN SECTIONS (前墩 / 中墩 / 后墩) */}
       <main className="flex-1 max-w-lg mx-auto w-full px-2.5 py-1.5 flex flex-col justify-between gap-1.5 overflow-hidden">
         {/* Floating Speech Bubbles & Emojis */}
         {speechBubbles.map((b) => (
@@ -603,29 +694,29 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         ))}
 
-        {/* SECTION 1: 前墩 (Head Dun 3/3) */}
-        <div className="bg-[#0F172A]/90 border border-slate-800/90 rounded-xl p-2 sm:p-2.5 shadow-md flex flex-col justify-between flex-1 max-h-[29vh]">
+        {/* SECTION 1: 前墩 (Head Dun 3/3 - ENLARGED HEIGHT) */}
+        <div className="bg-[#0F172A]/95 border border-slate-800/90 rounded-2xl p-2 sm:p-2.5 shadow-md flex flex-col justify-between flex-1 min-h-[110px] max-h-[30vh]">
           {/* Section Header */}
           <div className="flex items-center justify-between text-xs shrink-0 mb-1">
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-sky-400" />
-              <span className="font-bold text-slate-200 text-xs">前墩</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-xs shadow-sky-400/50" />
+              <span className="font-bold text-slate-100 text-xs sm:text-sm">前墩</span>
               <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 text-[10px] font-mono font-bold">
                 {headCards.length}/3
               </span>
             </div>
-            <div className="text-sky-400 text-xs font-bold font-mono truncate max-w-[230px]">
+            <div className="text-sky-400 text-xs sm:text-sm font-bold font-mono truncate max-w-[240px]">
               {getDunLabel(headEval, headCards, true)}
             </div>
           </div>
 
-          {/* Playing Cards Row (Overlapping Layout) */}
+          {/* Playing Cards Row (Overlapping Layout with Larger Cards) */}
           <div className="flex items-center justify-start pl-1 flex-1">
-            <div className="flex -space-x-8 sm:-space-x-6">
+            <div className="flex -space-x-7 sm:-space-x-5">
               {headCards.map((card) => (
                 <div
                   key={card.id}
-                  className="transition-transform hover:-translate-y-1.5 duration-150 drop-shadow-md"
+                  className="transition-transform hover:-translate-y-2 duration-150 drop-shadow-lg"
                 >
                   <CardItem card={card} size="md" />
                 </div>
@@ -634,29 +725,29 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         </div>
 
-        {/* SECTION 2: 中墩 (Middle Dun 5/5) */}
-        <div className="bg-[#0F172A]/90 border border-slate-800/90 rounded-xl p-2 sm:p-2.5 shadow-md flex flex-col justify-between flex-1 max-h-[29vh]">
+        {/* SECTION 2: 中墩 (Middle Dun 5/5 - ENLARGED HEIGHT) */}
+        <div className="bg-[#0F172A]/95 border border-slate-800/90 rounded-2xl p-2 sm:p-2.5 shadow-md flex flex-col justify-between flex-1 min-h-[110px] max-h-[30vh]">
           {/* Section Header */}
           <div className="flex items-center justify-between text-xs shrink-0 mb-1">
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-sky-400" />
-              <span className="font-bold text-slate-200 text-xs">中墩</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-xs shadow-sky-400/50" />
+              <span className="font-bold text-slate-100 text-xs sm:text-sm">中墩</span>
               <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 text-[10px] font-mono font-bold">
                 {midCards.length}/5
               </span>
             </div>
-            <div className="text-sky-400 text-xs font-bold font-mono truncate max-w-[230px]">
+            <div className="text-sky-400 text-xs sm:text-sm font-bold font-mono truncate max-w-[240px]">
               {getDunLabel(midEval, midCards, false)}
             </div>
           </div>
 
-          {/* Playing Cards Row (Overlapping Layout) */}
+          {/* Playing Cards Row (Overlapping Layout with Larger Cards) */}
           <div className="flex items-center justify-start pl-1 flex-1">
-            <div className="flex -space-x-9 sm:-space-x-7">
+            <div className="flex -space-x-8 sm:-space-x-6">
               {midCards.map((card) => (
                 <div
                   key={card.id}
-                  className="transition-transform hover:-translate-y-1.5 duration-150 drop-shadow-md"
+                  className="transition-transform hover:-translate-y-2 duration-150 drop-shadow-lg"
                 >
                   <CardItem card={card} size="md" />
                 </div>
@@ -665,29 +756,29 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         </div>
 
-        {/* SECTION 3: 后墩 (Tail Dun 5/5) */}
-        <div className="bg-[#0F172A]/90 border border-slate-800/90 rounded-xl p-2 sm:p-2.5 shadow-md flex flex-col justify-between flex-1 max-h-[29vh]">
+        {/* SECTION 3: 后墩 (Tail Dun 5/5 - ENLARGED HEIGHT) */}
+        <div className="bg-[#0F172A]/95 border border-slate-800/90 rounded-2xl p-2 sm:p-2.5 shadow-md flex flex-col justify-between flex-1 min-h-[110px] max-h-[30vh]">
           {/* Section Header */}
           <div className="flex items-center justify-between text-xs shrink-0 mb-1">
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-purple-400" />
-              <span className="font-bold text-slate-200 text-xs">后墩</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shadow-xs shadow-purple-400/50" />
+              <span className="font-bold text-slate-100 text-xs sm:text-sm">后墩</span>
               <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 text-[10px] font-mono font-bold">
                 {tailCards.length}/5
               </span>
             </div>
-            <div className="text-purple-400 text-xs font-bold font-mono truncate max-w-[230px]">
+            <div className="text-purple-400 text-xs sm:text-sm font-bold font-mono truncate max-w-[240px]">
               {getDunLabel(tailEval, tailCards, false)}
             </div>
           </div>
 
-          {/* Playing Cards Row (Overlapping Layout) */}
+          {/* Playing Cards Row (Overlapping Layout with Larger Cards) */}
           <div className="flex items-center justify-start pl-1 flex-1">
-            <div className="flex -space-x-9 sm:-space-x-7">
+            <div className="flex -space-x-8 sm:-space-x-6">
               {tailCards.map((card) => (
                 <div
                   key={card.id}
-                  className="transition-transform hover:-translate-y-1.5 duration-150 drop-shadow-md"
+                  className="transition-transform hover:-translate-y-2 duration-150 drop-shadow-lg"
                 >
                   <CardItem card={card} size="md" />
                 </div>

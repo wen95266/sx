@@ -1,8 +1,10 @@
 /**
- * Player Authentication and Profile Storage
+ * Player Authentication, Profile Storage & Disconnection Auto-Reconnect Session
  * Strictly requires mobile phone + 6-character password registration with Telegram Bot Authorization Whitelist.
  * Auto-syncs with server authorized_phones.json on each registration attempt.
  */
+
+import { Card, GamePhase, Player, AutoArrangeOption, LobbyRoom } from '../types/game';
 
 export interface UserProfile {
   id: string;
@@ -22,9 +24,24 @@ export interface UserProfile {
   lastLoginAt: number;
 }
 
+export interface ActiveMatchSession {
+  room?: LobbyRoom;
+  roundNumber: number;
+  phase: GamePhase;
+  countdown: number;
+  players: Player[];
+  headCards: Card[];
+  midCards: Card[];
+  tailCards: Card[];
+  smartOptions: AutoArrangeOption[];
+  currentOptionIndex: number;
+  timestamp: number;
+}
+
 const STORAGE_KEY_USER = 'shisanshui_current_user';
 const STORAGE_KEY_ALL_ACCOUNTS = 'shisanshui_registered_accounts';
 const STORAGE_KEY_AUTHORIZED_PHONES = 'shisanshui_authorized_phones';
+const STORAGE_KEY_MATCH_SESSION = 'shisanshui_active_match_session';
 
 export const AVATAR_OPTIONS = [
   '🧑‍💻', '🥷', '🧙', '👑', '🐉', '🦁', '🐯', '🐼', '🦊', '👧', '🤵', '🦸', '🐱', '🤖'
@@ -37,6 +54,40 @@ export const DEFAULT_AUTHORIZED_PHONES = [
   '19999999999',
   '13888888888'
 ];
+
+// --- 断线重连与对局状态持久化 (Disconnection Auto-Reconnect) ---
+
+export function saveMatchSession(session: ActiveMatchSession): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_MATCH_SESSION, JSON.stringify(session));
+  } catch (e) {
+    console.error('Failed to save match session', e);
+  }
+}
+
+export function getMatchSession(): ActiveMatchSession | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_MATCH_SESSION);
+    if (raw) {
+      const parsed: ActiveMatchSession = JSON.parse(raw);
+      // Valid if session is within 30 minutes
+      if (parsed && Date.now() - parsed.timestamp < 30 * 60 * 1000) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to read match session', e);
+  }
+  return null;
+}
+
+export function clearMatchSession(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY_MATCH_SESSION);
+  } catch (e) {
+    console.error('Failed to clear match session', e);
+  }
+}
 
 // --- 授权手机号白名单管理 (与服务器/Telegram Bot 实时同步) ---
 
@@ -77,7 +128,6 @@ export async function syncAuthorizedPhones(): Promise<string[]> {
     if (res.ok) {
       const list = await res.json();
       if (Array.isArray(list)) {
-        // 合并本地与服务端名单
         const current = getAuthorizedPhones();
         const merged = Array.from(new Set([...current, ...list]));
         saveAuthorizedPhones(merged);
@@ -90,7 +140,6 @@ export async function syncAuthorizedPhones(): Promise<string[]> {
   return getAuthorizedPhones();
 }
 
-// 立即在前端初始化时静默异步同步一次
 if (typeof window !== 'undefined') {
   syncAuthorizedPhones().catch(() => {});
 }
@@ -189,13 +238,6 @@ export function getAllAccounts(): UserProfile[] {
   return [];
 }
 
-/**
- * 手机号注册 (异步自动向服务端二次核验授权状态)
- * 规则：
- * 1. 只有 Bot 授权的手机号才能注册
- * 2. 需要昵称
- * 3. 密码精确 6 位数 (不限制大小写字母/字符)
- */
 export async function registerWithPhone(
   phone: string,
   nickname: string,
@@ -210,10 +252,8 @@ export async function registerWithPhone(
     return { success: false, message: '请输入手机号！' };
   }
 
-  // 1. 实时从服务器拉取最新的 Telegram Bot 授权列表
   const latestList = await syncAuthorizedPhones();
 
-  // 2. 校验 Bot 授权白名单
   if (!latestList.includes(cleanPhone) && !isPhoneAuthorized(cleanPhone)) {
     return {
       success: false,
@@ -221,17 +261,14 @@ export async function registerWithPhone(
     };
   }
 
-  // 3. 校验昵称
   if (!cleanNickname) {
     return { success: false, message: '请输入玩家昵称！' };
   }
 
-  // 4. 校验密码长度 (精确 6 位数)
   if (cleanPassword.length !== 6) {
     return { success: false, message: '密码必须为 6 位数字符（不限大小写字母/数字）！' };
   }
 
-  // 5. 检查是否已被注册
   const accounts = getAllAccounts();
   const existing = accounts.find((a) => a.phone === cleanPhone);
   if (existing) {
@@ -261,9 +298,6 @@ export async function registerWithPhone(
   return { success: true, message: '🎉 注册成功，欢迎加入十三水对战场！', user: newUser };
 }
 
-/**
- * 手机号登录
- */
 export function loginWithPhone(
   phone: string,
   password: string
@@ -296,9 +330,6 @@ export function loginWithPhone(
   return { success: true, message: '✓ 登录成功，正在进入游戏大厅...', user: account };
 }
 
-/**
- * 退出登录
- */
 export function logoutUser(): UserProfile {
   const current = getStoredUser();
   const loggedOut: UserProfile = {
@@ -306,6 +337,7 @@ export function logoutUser(): UserProfile {
     isLoggedIn: false
   };
   localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(loggedOut));
+  clearMatchSession();
   return loggedOut;
 }
 

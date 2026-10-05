@@ -87,7 +87,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           }`}
         >
           <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="font-bold">📱 玩家网页端</span>
+          <span className="font-bold">📱 大厅设计预览</span>
         </button>
 
         <button

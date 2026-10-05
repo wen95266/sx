@@ -13,7 +13,8 @@ import {
   Check,
   X,
   CreditCard,
-  Edit2
+  Edit2,
+  Key
 } from 'lucide-react';
 import {
   UserProfile,
@@ -130,7 +131,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             }`}
           >
             <User className="w-3.5 h-3.5 text-sky-400" />
-            <span>个人战绩</span>
+            <span>玩家战绩</span>
           </button>
           <button
             onClick={() => setActiveTab('edit')}
@@ -141,7 +142,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             }`}
           >
             <Edit2 className="w-3.5 h-3.5 text-amber-400" />
-            <span>修改昵称头像</span>
+            <span>注册/改名</span>
           </button>
           <button
             onClick={() => setActiveTab('switch')}
@@ -151,8 +152,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <UserPlus className="w-3.5 h-3.5 text-emerald-400" />
-            <span>切换/新账号</span>
+            <Key className="w-3.5 h-3.5 text-emerald-400" />
+            <span>登录/切换</span>
           </button>
         </div>
 

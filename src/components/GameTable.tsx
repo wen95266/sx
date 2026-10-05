@@ -9,6 +9,7 @@ import {
   SettlementSummary,
   ChatMessage,
   EmojiReaction,
+  SpeechBubble,
   ConnectionStatus,
   LobbyRoom
 } from '../types/game';
@@ -67,18 +68,88 @@ import {
   MessageSquareOff
 } from 'lucide-react';
 
-const QUICK_PHRASES = [
-  '手气真好，这把看我全垒打！🔥',
-  '催催催，理牌中别急！⏱️',
-  '谁敢跟我比尾道？🎴',
-  '手气背，差点倒牌相公了...😅',
-  '打得不错，承让承让！🤝',
-  '吃我一记打枪！💥',
-  '天胡！至尊青龙在此！🐉',
-  '给大佬递茶 🍵'
+export const QUICK_PHRASE_CATEGORIES = [
+  {
+    id: 'hurry',
+    name: '⚡ 催牌神句',
+    phrases: [
+      '快点出牌啊，我等得花儿都谢了！⏱️',
+      '思考这么久，难道拿了十三水？🤔',
+      '别磨蹭了，手气正旺呢！🔥',
+      '时间就是金钱，赶紧亮牌见分晓！⚡'
+    ]
+  },
+  {
+    id: 'taunt',
+    name: '🔥 霸气挑衅',
+    phrases: [
+      '这把牌太神，我都不好意思赢你们！😎',
+      '准备好水数，这把我要通杀全场！💥',
+      '对不住了各位，天胡大奖在此！👑',
+      '谁敢跟我比尾道同花顺？🎴'
+    ]
+  },
+  {
+    id: 'beg',
+    name: '🥺 求饶卖萌',
+    phrases: [
+      '手下留情，别打我枪啊大佬！😭',
+      '今天手气太背，全是单张乌龙...🙈',
+      '大哥大姐高抬贵手，给口饭吃！🙏',
+      '给个机会，下把一定逆天翻盘！✨'
+    ]
+  },
+  {
+    id: 'greeting',
+    name: '🤝 问候礼仪',
+    phrases: [
+      '承让承让，承蒙各位牌友关照！🤝',
+      '祝大家把把通天大顺，财源滚滚！🧧',
+      '打得真好，佩服佩服！👏',
+      '给各位大佬递上热茶 🍵'
+    ]
+  }
 ];
 
-const EMOJI_LIST = ['🀄', '💥', '👑', '🎯', '🍺', '🔥', '👏', '💸', '😭', '🍵', '💣'];
+export const EMOJI_CATEGORIES = [
+  { id: 'poker', name: '🀄 牌局', emojis: ['🀄', '🃏', '👑', '💥', '🏆', '🎯', '🔥', '💣'] },
+  { id: 'fun', name: '😄 搞笑', emojis: ['🤣', '😎', '🤑', '😭', '🤩', '🐔', '🚀', '🍺'] }
+];
+
+export const EMOJI_LIST = ['🀄', '💥', '👑', '🎯', '🍺', '🔥', '👏', '💸', '😭', '🍵', '💣', '🤣', '😎', '🤑', '🐔', '🚀'];
+
+export const BOT_BANTER_REPLIES: Record<string, string[]> = {
+  hurry: [
+    '催什么催，本雀圣正在精算中墩葫芦！',
+    '思考也是牌技的一部分嘛！马上好！',
+    '别急，好牌总是留在最后的！',
+    '急啥，等我出完牌可别哭哦！'
+  ],
+  taunt: [
+    '口气挺大，等会儿看谁被打枪！',
+    '话别说太早，我的尾道同花顺可不答应！',
+    '哎哟，这么自信？我可要加码了！',
+    '等结算出来，看你还笑不笑得出来！'
+  ],
+  beg: [
+    '哈哈，牌桌上可没有同情心！',
+    '看在你这么诚恳的份上，我下手轻点~',
+    '求饶也没用，十三水全凭实力！',
+    '放心，我只打你一道（坏笑）'
+  ],
+  greeting: [
+    '客气了！大家一起发发发！',
+    '牌逢对手，今天必须战个痛快！',
+    '祝大家好运，不过冠军归我！',
+    '幸会幸会，切磋一下！'
+  ],
+  general: [
+    '这把牌型有点微妙...',
+    '感觉有人要倒牌相公了哦！',
+    '稳扎稳打，冲三走起！',
+    '看我的终极理牌大法！'
+  ]
+};
 
 const BOT_QUOTES = {
   deal: [
@@ -251,12 +322,16 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Chat & Emoji Reactions
   const [showChat, setShowChat] = useState(false);
   const [chatInput, setChatInput] = useState('');
+  const [showQuickPhrasesModal, setShowQuickPhrasesModal] = useState(false);
+  const [showEmojiPickerModal, setShowEmojiPickerModal] = useState(false);
+  const [activePhraseTab, setActivePhraseTab] = useState('hurry');
+  const [speechBubbles, setSpeechBubbles] = useState<SpeechBubble[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: 'init_sys',
       senderId: 'system',
       senderName: '系统',
-      text: '欢迎进入十三水多人联机牌桌！已为您加载本地高精度 SVG 扑克牌资源。',
+      text: '欢迎进入十三水多人联机实时牌桌！支持局内抽屉聊天、发光飘屏弹幕、8+快捷挑衅与表情互动。',
       time: '14:30',
       isSystem: true
     }
@@ -278,10 +353,24 @@ export const GameTable: React.FC<GameTableProps> = ({
     return () => clearInterval(timer);
   }, [connectionStatus]);
 
+  // Speech bubble display
+  const showSpeechBubble = useCallback((playerId: string, text: string) => {
+    const newBubble: SpeechBubble = {
+      id: `bubble_${Date.now()}_${Math.random()}`,
+      playerId,
+      text,
+      createdAt: Date.now()
+    };
+    setSpeechBubbles((prev) => [...prev.filter((b) => b.playerId !== playerId), newBubble]);
+    setTimeout(() => {
+      setSpeechBubbles((prev) => prev.filter((b) => b.id !== newBubble.id));
+    }, 3800);
+  }, []);
+
   // Send danmu
   const pushDanmu = useCallback((sender: string, text: string, avatar?: string) => {
     if (!danmuEnabled) return;
-    const colors = ['#f59e0b', '#38bdf8', '#4ade80', '#ec4899', '#a855f7'];
+    const colors = ['#f59e0b', '#38bdf8', '#4ade80', '#ec4899', '#a855f7', '#fb7185', '#34d399'];
     const newDanmu: DanmuItem = {
       id: `danmu_${Date.now()}_${Math.random()}`,
       sender,
@@ -295,6 +384,52 @@ export const GameTable: React.FC<GameTableProps> = ({
       setActiveDanmus((prev) => prev.filter((d) => d.id !== newDanmu.id));
     }, 6000);
   }, [danmuEnabled]);
+
+  // Bot banter reaction
+  const triggerBotBanterResponse = useCallback((userText: string) => {
+    const botOpponents = [
+      { id: 'bot_west', name: '西门吹水 (AI)', avatar: '🤖' },
+      { id: 'bot_north', name: '北冥神手 (AI)', avatar: '🥷' },
+      { id: 'bot_east', name: '东方雀圣 (AI)', avatar: '🧙' }
+    ];
+    const responder = botOpponents[Math.floor(Math.random() * botOpponents.length)];
+
+    let replyList = BOT_BANTER_REPLIES.general;
+    if (userText.includes('快') || userText.includes('催') || userText.includes('等') || userText.includes('磨蹭')) {
+      replyList = BOT_BANTER_REPLIES.hurry;
+    } else if (userText.includes('赢') || userText.includes('神') || userText.includes('杀') || userText.includes('通天') || userText.includes('大奖')) {
+      replyList = BOT_BANTER_REPLIES.taunt;
+    } else if (userText.includes('留情') || userText.includes('背') || userText.includes('求') || userText.includes('乌龙') || userText.includes('手下')) {
+      replyList = BOT_BANTER_REPLIES.beg;
+    } else if (userText.includes('承让') || userText.includes('好') || userText.includes('茶') || userText.includes('朋友') || userText.includes('恭喜')) {
+      replyList = BOT_BANTER_REPLIES.greeting;
+    }
+
+    const replyText = replyList[Math.floor(Math.random() * replyList.length)];
+    const delay = Math.floor(700 + Math.random() * 800);
+
+    setTimeout(() => {
+      const d = new Date();
+      const timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `chat_${Date.now()}_${Math.random()}`,
+          senderId: responder.id,
+          senderName: responder.name,
+          avatar: responder.avatar,
+          text: replyText,
+          time: timeStr,
+          isSystem: false
+        }
+      ]);
+      pushDanmu(responder.name, replyText, responder.avatar);
+      showSpeechBubble(responder.id, replyText);
+      if (soundEnabled) {
+        SoundEffects.playMessagePop();
+      }
+    }, delay);
+  }, [pushDanmu, showSpeechBubble, soundEnabled]);
 
   const addChatMessage = useCallback((senderId: string, senderName: string, text: string, avatar?: string, isSystem = false) => {
     const d = new Date();
@@ -312,20 +447,41 @@ export const GameTable: React.FC<GameTableProps> = ({
       }
     ]);
     pushDanmu(senderName, text, avatar);
+    if (!isSystem) {
+      showSpeechBubble(senderId, text);
+    }
     if (soundEnabled && !isSystem) {
       SoundEffects.playMessagePop();
     }
-  }, [soundEnabled, pushDanmu]);
+
+    // If human user sent the chat, trigger AI bot banter!
+    if (senderId === 'player_me' && !isSystem) {
+      triggerBotBanterResponse(text);
+    }
+  }, [soundEnabled, pushDanmu, showSpeechBubble, triggerBotBanterResponse]);
 
   // Trigger floating emoji reaction
   const triggerReaction = (playerId: string, emoji: string) => {
     if (soundEnabled) SoundEffects.playEmojiReaction();
     const id = `react_${Date.now()}_${Math.random()}`;
     setActiveReactions((prev) => [...prev, { id, playerId, emoji }]);
+    showSpeechBubble(playerId, emoji);
     pushDanmu(players.find(p => p.id === playerId)?.name || '玩家', emoji);
     setTimeout(() => {
       setActiveReactions((prev) => prev.filter((r) => r.id !== id));
     }, 2200);
+
+    // Bot emoji echo
+    if (playerId === 'player_me') {
+      setTimeout(() => {
+        const botOpponents = ['bot_west', 'bot_north', 'bot_east'];
+        const randomBot = botOpponents[Math.floor(Math.random() * botOpponents.length)];
+        const echoEmojis = ['👏', '🔥', '🤣', '🤩', '🀄'];
+        const botEmoji = echoEmojis[Math.floor(Math.random() * echoEmojis.length)];
+        setActiveReactions((prev) => [...prev, { id: `bot_${Date.now()}`, playerId: randomBot, emoji: botEmoji }]);
+        showSpeechBubble(randomBot, botEmoji);
+      }, 900);
+    }
   };
 
   // Disconnect & Reconnect Simulation & Recovery
@@ -845,6 +1001,17 @@ export const GameTable: React.FC<GameTableProps> = ({
 
         {/* Top Player (North - Bot North) */}
         <div className="relative flex flex-col items-center z-10">
+          {/* North Speech Bubble */}
+          {speechBubbles.filter((b) => b.playerId === botNorth.id).map((b) => (
+            <div
+              key={b.id}
+              className="absolute -top-12 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 text-amber-300 border border-amber-400/60 shadow-2xl px-3 py-1 rounded-2xl text-xs font-bold whitespace-nowrap animate-in zoom-in-95 duration-150 flex items-center gap-1.5 pointer-events-none"
+            >
+              <span>💬 {b.text}</span>
+              <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-6 border-t-slate-900" />
+            </div>
+          ))}
+
           {activeReactions.filter((r) => r.playerId === botNorth.id).map((r) => (
             <div
               key={r.id}
@@ -905,6 +1072,17 @@ export const GameTable: React.FC<GameTableProps> = ({
         <div className="w-full flex items-center justify-between px-2 z-10">
           {/* West Player (Bot West) */}
           <div className="relative flex flex-col items-start w-44 md:w-52">
+            {/* West Speech Bubble */}
+            {speechBubbles.filter((b) => b.playerId === botWest.id).map((b) => (
+              <div
+                key={b.id}
+                className="absolute -top-12 left-0 z-40 bg-slate-900/95 text-amber-300 border border-amber-400/60 shadow-2xl px-3 py-1 rounded-2xl text-xs font-bold whitespace-nowrap animate-in zoom-in-95 duration-150 flex items-center gap-1.5 pointer-events-none"
+              >
+                <span>💬 {b.text}</span>
+                <div className="absolute -bottom-1.5 left-6 w-0 h-0 border-x-4 border-x-transparent border-t-6 border-t-slate-900" />
+              </div>
+            ))}
+
             {activeReactions.filter((r) => r.playerId === botWest.id).map((r) => (
               <div
                 key={r.id}
@@ -1104,6 +1282,17 @@ export const GameTable: React.FC<GameTableProps> = ({
 
           {/* East Player (Bot East) */}
           <div className="relative flex flex-col items-end w-44 md:w-52">
+            {/* East Speech Bubble */}
+            {speechBubbles.filter((b) => b.playerId === botEast.id).map((b) => (
+              <div
+                key={b.id}
+                className="absolute -top-12 right-0 z-40 bg-slate-900/95 text-amber-300 border border-amber-400/60 shadow-2xl px-3 py-1 rounded-2xl text-xs font-bold whitespace-nowrap animate-in zoom-in-95 duration-150 flex items-center gap-1.5 pointer-events-none"
+              >
+                <span>💬 {b.text}</span>
+                <div className="absolute -bottom-1.5 right-6 w-0 h-0 border-x-4 border-x-transparent border-t-6 border-t-slate-900" />
+              </div>
+            ))}
+
             {activeReactions.filter((r) => r.playerId === botEast.id).map((r) => (
               <div
                 key={r.id}
@@ -1409,7 +1598,18 @@ export const GameTable: React.FC<GameTableProps> = ({
           )}
 
           {/* Player Identity Card */}
-          <div className="flex items-center gap-3 px-4 py-1.5 bg-slate-900/90 border border-slate-800 rounded-full text-xs shadow-md">
+          <div className="relative flex items-center gap-3 px-4 py-1.5 bg-slate-900/90 border border-slate-800 rounded-full text-xs shadow-md">
+            {/* Player Speech Bubble */}
+            {speechBubbles.filter((b) => b.playerId === me.id).map((b) => (
+              <div
+                key={b.id}
+                className="absolute -top-12 left-1/2 -translate-x-1/2 z-40 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black shadow-2xl px-3.5 py-1.5 rounded-2xl text-xs whitespace-nowrap animate-in zoom-in-95 duration-150 flex items-center gap-1.5 pointer-events-none border border-amber-300"
+              >
+                <span>💬 {b.text}</span>
+                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-6 border-t-amber-500" />
+              </div>
+            ))}
+
             <span className="text-lg">{me.avatar}</span>
             <span className="font-bold text-white">{me.name} (您)</span>
             <span className="text-amber-400 font-mono font-bold">{me.totalScore} 水</span>
@@ -1423,42 +1623,75 @@ export const GameTable: React.FC<GameTableProps> = ({
       </div>
 
       {/* Floating In-Game Emoji & Chat Quick Bar (Bottom) */}
-      <div className="h-11 bg-slate-900 border-t border-slate-800 px-3 md:px-6 flex items-center justify-between text-xs z-30">
+      <div className="min-h-12 bg-slate-900/95 border-t border-slate-800 px-3 md:px-6 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs z-30 shadow-lg">
         {allowChat ? (
           <>
-            {/* Left: Emoji Reaction Bar */}
-            <div className="flex items-center gap-1 overflow-x-auto py-1">
-              <span className="text-[10px] text-slate-400 hidden sm:inline mr-1">表情互动:</span>
-              {EMOJI_LIST.map((emo) => (
-                <button
-                  key={emo}
-                  type="button"
-                  onClick={() => triggerReaction(me.id, emo)}
-                  className="px-1.5 py-0.5 hover:bg-slate-800 rounded-lg text-base cursor-pointer transition-transform hover:scale-125"
-                >
-                  {emo}
-                </button>
-              ))}
+            {/* Left: Quick Phrases & Emoji Pickers */}
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {/* Quick Phrases Trigger Button */}
+              <button
+                type="button"
+                onClick={() => setShowQuickPhrasesModal(!showQuickPhrasesModal)}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs ${
+                  showQuickPhrasesModal
+                    ? 'bg-amber-400 text-slate-950 shadow-amber-500/20'
+                    : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700'
+                }`}
+                title="打开快捷挑衅与常用短语选择器"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>💬 快捷语</span>
+              </button>
+
+              {/* Emoji Sticker Trigger Button */}
+              <button
+                type="button"
+                onClick={() => setShowEmojiPickerModal(!showEmojiPickerModal)}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs ${
+                  showEmojiPickerModal
+                    ? 'bg-amber-400 text-slate-950 shadow-amber-500/20'
+                    : 'bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700'
+                }`}
+                title="打开互动表情选择器"
+              >
+                <Smile className="w-3.5 h-3.5" />
+                <span>😄 表情</span>
+              </button>
+
+              {/* Fast 1-Click Common Emojis */}
+              <div className="hidden sm:flex items-center gap-0.5 pl-1 border-l border-slate-800">
+                {['🀄', '💥', '👑', '🔥', '🤣', '😎', '😭', '🚀'].map((emo) => (
+                  <button
+                    key={emo}
+                    type="button"
+                    onClick={() => triggerReaction(me.id, emo)}
+                    className="p-1 hover:bg-slate-800 rounded-lg text-sm cursor-pointer transition-transform hover:scale-130 active:scale-95"
+                    title={`发送 ${emo} 表情`}
+                  >
+                    {emo}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Right: Quick Phrases Bar */}
-            <div className="flex items-center gap-1.5">
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    addChatMessage('player_me', currentUser.nickname, e.target.value, currentUser.avatar);
-                    e.target.value = '';
-                  }
-                }}
-                defaultValue=""
-                className="bg-slate-950 border border-slate-700 text-slate-300 text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:border-amber-500 cursor-pointer"
+            {/* Center/Right: Instant Inline Chat Input */}
+            <form onSubmit={handleSendChat} className="flex-1 max-w-md flex items-center gap-1.5 min-w-[200px]">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="输入聊天内容或弹幕 (回车立即发送)..."
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 shadow-inner"
+              />
+              <button
+                type="submit"
+                disabled={!chatInput.trim()}
+                className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-30 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer transition-colors shrink-0 shadow-md active:scale-95"
               >
-                <option value="" disabled>💬 快捷挑衅与常用短语...</option>
-                {QUICK_PHRASES.map((phrase, idx) => (
-                  <option key={idx} value={phrase}>{phrase}</option>
-                ))}
-              </select>
-            </div>
+                <Send className="w-3 h-3" />
+                <span className="hidden sm:inline">发送</span>
+              </button>
+            </form>
           </>
         ) : (
           <div className="w-full flex items-center justify-between text-xs text-slate-400 py-1">
@@ -1472,6 +1705,106 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         )}
       </div>
+
+      {/* Categorized Quick Phrases Popover Modal */}
+      {showQuickPhrasesModal && allowChat && (
+        <div className="absolute left-4 bottom-14 z-50 w-80 md:w-96 bg-slate-900 border border-amber-500/40 rounded-2xl shadow-2xl p-3 flex flex-col gap-2.5 backdrop-blur-md animate-in slide-in-from-bottom-2 duration-150">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+              <MessageCircle className="w-4 h-4 text-amber-400" />
+              <span>快捷挑衅与局内短语 (点击即发)</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowQuickPhrasesModal(false)}
+              className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Category Tabs */}
+          <div className="grid grid-cols-4 gap-1 p-0.5 bg-slate-950 rounded-xl">
+            {QUICK_PHRASE_CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setActivePhraseTab(cat.id)}
+                className={`py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors truncate px-1 ${
+                  activePhraseTab === cat.id
+                    ? 'bg-amber-400 text-slate-950 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Phrases Grid */}
+          <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto">
+            {QUICK_PHRASE_CATEGORIES.find((c) => c.id === activePhraseTab)?.phrases.map((phrase, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => {
+                  addChatMessage('player_me', currentUser.nickname, phrase, currentUser.avatar);
+                  setShowQuickPhrasesModal(false);
+                }}
+                className="text-left px-3 py-2 bg-slate-950/80 hover:bg-amber-500/20 hover:border-amber-500/40 border border-slate-800 rounded-xl text-xs text-slate-200 hover:text-amber-200 transition-colors cursor-pointer flex items-center justify-between group"
+              >
+                <span>{phrase}</span>
+                <span className="text-[10px] text-amber-400/60 group-hover:text-amber-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                  发送 →
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Categorized Emoji Stickers Popover Modal */}
+      {showEmojiPickerModal && allowChat && (
+        <div className="absolute left-4 bottom-14 z-50 w-72 md:w-80 bg-slate-900 border border-sky-500/40 rounded-2xl shadow-2xl p-3 flex flex-col gap-2.5 backdrop-blur-md animate-in slide-in-from-bottom-2 duration-150">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <span className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+              <Smile className="w-4 h-4 text-sky-400" />
+              <span>牌桌互动表情包 (点击弹跳飞屏)</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowEmojiPickerModal(false)}
+              className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Emoji Grid */}
+          <div className="space-y-2">
+            {EMOJI_CATEGORIES.map((cat) => (
+              <div key={cat.id} className="space-y-1">
+                <div className="text-[10px] text-slate-400 font-bold px-1">{cat.name}:</div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {cat.emojis.map((emo) => (
+                    <button
+                      key={emo}
+                      type="button"
+                      onClick={() => {
+                        triggerReaction(me.id, emo);
+                        setShowEmojiPickerModal(false);
+                      }}
+                      className="p-2 bg-slate-950/80 hover:bg-slate-800 border border-slate-800 hover:border-amber-400 rounded-xl text-xl flex items-center justify-center cursor-pointer transition-transform hover:scale-115 active:scale-95"
+                    >
+                      {emo}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* In-Game Chat Drawer (Toggleable) */}
       {showChat && (

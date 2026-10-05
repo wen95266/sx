@@ -153,6 +153,13 @@ export interface EmojiReaction {
   emoji: string;
 }
 
+export interface SpeechBubble {
+  id: string;
+  playerId: string;
+  text: string;
+  createdAt: number;
+}
+
 export type RoomType = 'realtime' | 'scheduled'; // 实时场 vs 预约场
 
 export interface LobbyRoom {

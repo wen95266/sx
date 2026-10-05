@@ -6,6 +6,7 @@ export interface VoicePhrase {
   id: string;
   category: VoicePersona;
   categoryName: string;
+  scenario?: 'cui' | 'tiaoxin' | 'qiurao' | 'wenhou' | 'gaoxiao';
   avatar: string;
   roleTitle: string;
   text: string;
@@ -14,11 +15,69 @@ export interface VoicePhrase {
 }
 
 export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
-  // 1. 男声 (Male)
+  // 1. 催牌急救 (Rush)
+  {
+    id: 'c1',
+    category: 'child',
+    categoryName: '小孩',
+    scenario: 'cui',
+    avatar: '👶',
+    roleTitle: '淘气萌娃',
+    text: '叔叔阿姨快点出牌呀，我等得花儿都谢啦！',
+    pitch: 1.7,
+    rate: 1.22
+  },
+  {
+    id: 'cui1',
+    category: 'male',
+    categoryName: '男声',
+    scenario: 'cui',
+    avatar: '⚡',
+    roleTitle: '催牌达人',
+    text: '快点出牌啊，我等得花儿都谢了！',
+    pitch: 1.0,
+    rate: 1.25
+  },
+  {
+    id: 'f3',
+    category: 'female',
+    categoryName: '女声',
+    scenario: 'cui',
+    avatar: '💅',
+    roleTitle: '傲娇千金',
+    text: '别思考太久，本姑娘的时间可是很宝贵的～',
+    pitch: 1.28,
+    rate: 1.1
+  },
+  {
+    id: 'r1',
+    category: 'roar',
+    categoryName: '怒吼',
+    scenario: 'cui',
+    avatar: '💥',
+    roleTitle: '咆哮帝',
+    text: '别磨叽了！快点出牌！老子等不及了！',
+    pitch: 0.5,
+    rate: 1.35
+  },
+  {
+    id: 'e4',
+    category: 'elder',
+    categoryName: '老人',
+    scenario: 'cui',
+    avatar: '🀄',
+    roleTitle: '老门东牌圣',
+    text: '出牌慢一点，老人家眼睛有点花咯～',
+    pitch: 0.7,
+    rate: 0.85
+  },
+
+  // 2. 挑衅炫耀 (Brag & Provoke)
   {
     id: 'm1',
     category: 'male',
     categoryName: '男声',
+    scenario: 'tiaoxin',
     avatar: '👨',
     roleTitle: '霸气神豪',
     text: '准备好水数，这把我要通杀全场！',
@@ -29,6 +88,7 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     id: 'm2',
     category: 'male',
     categoryName: '男声',
+    scenario: 'tiaoxin',
     avatar: '😎',
     roleTitle: '搞笑大哥',
     text: '这把牌太神，我都不好意思赢你们！',
@@ -39,6 +99,7 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     id: 'm3',
     category: 'male',
     categoryName: '男声',
+    scenario: 'tiaoxin',
     avatar: '💰',
     roleTitle: '金主爸爸',
     text: '牌好任性！全场消费由本少爷买单！',
@@ -49,6 +110,7 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     id: 'm4',
     category: 'male',
     categoryName: '男声',
+    scenario: 'tiaoxin',
     avatar: '🦁',
     roleTitle: '霸气雀王',
     text: '谁与争锋？在我面前全都是弟弟！',
@@ -56,21 +118,10 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     rate: 1.1
   },
   {
-    id: 'm5',
-    category: 'male',
-    categoryName: '男声',
-    avatar: '🕶️',
-    roleTitle: '冷酷战神',
-    text: '牌桌如战场，看我一击即中全垒打！',
-    pitch: 0.84,
-    rate: 1.0
-  },
-
-  // 2. 女声 (Female)
-  {
     id: 'f1',
     category: 'female',
     categoryName: '女声',
+    scenario: 'tiaoxin',
     avatar: '💋',
     roleTitle: '御姐女皇',
     text: '姐姐劝你早点认输，少输几道水！',
@@ -81,6 +132,7 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     id: 'f2',
     category: 'female',
     categoryName: '女声',
+    scenario: 'tiaoxin',
     avatar: '👠',
     roleTitle: '知性女神',
     text: '牌型这么好看，不赢我都对不起自己！',
@@ -88,83 +140,10 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     rate: 1.05
   },
   {
-    id: 'f3',
-    category: 'female',
-    categoryName: '女声',
-    avatar: '💅',
-    roleTitle: '傲娇千金',
-    text: '别思考太久，本姑娘的时间可是很宝贵的～',
-    pitch: 1.28,
-    rate: 1.1
-  },
-  {
-    id: 'f4',
-    category: 'female',
-    categoryName: '女声',
-    avatar: '🍷',
-    roleTitle: '优雅贵妇',
-    text: '优雅，永不过时，这局胜负已定！',
-    pitch: 1.18,
-    rate: 0.98
-  },
-
-  // 3. 老人 (Elder)
-  {
-    id: 'e1',
-    category: 'elder',
-    categoryName: '老人',
-    avatar: '👴',
-    roleTitle: '扫地老僧',
-    text: '老夫玩十三水的时候，你们还在抓泥巴呢！',
-    pitch: 0.65,
-    rate: 0.82
-  },
-  {
-    id: 'e2',
-    category: 'elder',
-    categoryName: '老人',
-    avatar: '🍵',
-    roleTitle: '太极宗师',
-    text: '年轻人不要太气盛，老夫要开始发功了！',
-    pitch: 0.68,
-    rate: 0.8
-  },
-  {
-    id: 'e3',
-    category: 'elder',
-    categoryName: '老人',
-    avatar: '📜',
-    roleTitle: '玄学老仙',
-    text: '稳住！老夫这套牌蕴含天地阴阳五行！',
-    pitch: 0.62,
-    rate: 0.78
-  },
-  {
-    id: 'e4',
-    category: 'elder',
-    categoryName: '老人',
-    avatar: '🀄',
-    roleTitle: '老门东牌圣',
-    text: '出牌慢一点，老人家眼睛有点花咯～',
-    pitch: 0.7,
-    rate: 0.85
-  },
-
-  // 4. 小孩 (Child)
-  {
-    id: 'c1',
-    category: 'child',
-    categoryName: '小孩',
-    avatar: '👶',
-    roleTitle: '淘气正太',
-    text: '叔叔阿姨快点出牌呀，我等得花儿都谢啦！',
-    pitch: 1.7,
-    rate: 1.22
-  },
-  {
     id: 'c2',
     category: 'child',
     categoryName: '小孩',
+    scenario: 'tiaoxin',
     avatar: '🍭',
     roleTitle: '吃货萌娃',
     text: '哇！我拿到超级厉害的无敌神牌啦！',
@@ -172,31 +151,23 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     rate: 1.25
   },
   {
-    id: 'c3',
-    category: 'child',
-    categoryName: '小孩',
-    avatar: '🐣',
-    roleTitle: '可萌萝莉',
-    text: '我还是个孩子，你们可不能打我枪哦！',
-    pitch: 1.8,
-    rate: 1.2
-  },
-  {
-    id: 'c4',
-    category: 'child',
-    categoryName: '小孩',
-    avatar: '🎈',
-    roleTitle: '无敌小霸王',
-    text: '耶！赢了赢了，我要拿水数买超级大糖果！',
-    pitch: 1.68,
-    rate: 1.28
+    id: 'r4',
+    category: 'roar',
+    categoryName: '怒吼',
+    scenario: 'tiaoxin',
+    avatar: '⚡',
+    roleTitle: '雷霆吼兽',
+    text: '颤抖吧！这把老子要血洗全场！',
+    pitch: 0.46,
+    rate: 1.4
   },
 
-  // 5. 撒娇卖萌 (Cute)
+  // 3. 认输求饶 (Beg & Surrender)
   {
     id: 's1',
     category: 'cute',
     categoryName: '撒娇',
+    scenario: 'qiurao',
     avatar: '🥺',
     roleTitle: '撒娇妹妹',
     text: '哥哥手下留情嘛，人家不想输水水～',
@@ -207,6 +178,7 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     id: 's2',
     category: 'cute',
     categoryName: '撒娇',
+    scenario: 'qiurao',
     avatar: '🌸',
     roleTitle: '呆萌甜妹',
     text: '嘤嘤嘤，人家刚刚手滑放错墩了啦！',
@@ -217,6 +189,7 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     id: 's3',
     category: 'cute',
     categoryName: '撒娇',
+    scenario: 'qiurao',
     avatar: '🎀',
     roleTitle: '娇滴水萌宝',
     text: '给个机会嘛，人家下把一定乖乖的～',
@@ -227,60 +200,88 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     id: 's4',
     category: 'cute',
     categoryName: '撒娇',
+    scenario: 'qiurao',
     avatar: '💕',
     roleTitle: '粘人小甜心',
     text: '人家牌这么弱，哥哥不准打人家枪枪哦～',
     pitch: 1.9,
     rate: 0.94
   },
-
-  // 6. 怒吼咆哮 (Roar)
   {
-    id: 'r1',
-    category: 'roar',
-    categoryName: '怒吼',
-    avatar: '💥',
-    roleTitle: '咆哮帝',
-    text: '别磨叽了！快点出牌！老子等不及了！',
-    pitch: 0.5,
-    rate: 1.35
+    id: 'qr1',
+    category: 'female',
+    categoryName: '女声',
+    scenario: 'qiurao',
+    avatar: '😭',
+    roleTitle: '战败萌新',
+    text: '手下留情，别打我枪啊大佬！',
+    pitch: 1.3,
+    rate: 1.1
   },
   {
     id: 'r2',
     category: 'roar',
     categoryName: '怒吼',
+    scenario: 'qiurao',
     avatar: '🔥',
     roleTitle: '暴躁老哥',
     text: '气死我了！连续三把乌龙，老子要逆天！',
     pitch: 0.52,
     rate: 1.38
   },
+
+  // 4. 礼貌问候 (Greetings & Respect)
   {
-    id: 'r3',
-    category: 'roar',
-    categoryName: '怒吼',
-    avatar: '💣',
-    roleTitle: '狂暴战神',
-    text: '谁敢打我枪？老子直接同花顺通杀你！',
-    pitch: 0.48,
-    rate: 1.32
+    id: 'c3',
+    category: 'child',
+    categoryName: '小孩',
+    scenario: 'wenhou',
+    avatar: '🐣',
+    roleTitle: '可萌萝莉',
+    text: '叔叔阿姨好！我还是个孩子，你们可不能打我枪哦！',
+    pitch: 1.8,
+    rate: 1.2
   },
   {
-    id: 'r4',
-    category: 'roar',
-    categoryName: '怒吼',
-    avatar: '⚡',
-    roleTitle: '雷霆吼兽',
-    text: '颤抖吧！这把老子要血洗全场！',
-    pitch: 0.46,
-    rate: 1.4
+    id: 'wh1',
+    category: 'male',
+    categoryName: '男声',
+    scenario: 'wenhou',
+    avatar: '🙇',
+    roleTitle: '谦虚新手',
+    text: '各位大佬好，小弟初来乍到，请多关照！',
+    pitch: 1.0,
+    rate: 1.0
+  },
+  {
+    id: 'e1',
+    category: 'elder',
+    categoryName: '老人',
+    scenario: 'wenhou',
+    avatar: '👴',
+    roleTitle: '扫地老僧',
+    text: '老夫玩十三水的时候，你们还在抓泥巴呢！',
+    pitch: 0.65,
+    rate: 0.82
+  },
+  {
+    id: 'f4',
+    category: 'female',
+    categoryName: '女声',
+    scenario: 'wenhou',
+    avatar: '🍷',
+    roleTitle: '优雅贵妇',
+    text: '优雅，永不过时，祝大家牌运昌隆！',
+    pitch: 1.18,
+    rate: 0.98
   },
 
-  // 7. 搞笑梗包 (Meme)
+  // 5. 爆笑梗包 (Fun & Memes)
   {
     id: 'g1',
     category: 'meme',
     categoryName: '搞笑梗',
+    scenario: 'gaoxiao',
     avatar: '🤡',
     roleTitle: '绝活哥',
     text: '以为我要起飞，结果我是小丑！',
@@ -291,6 +292,7 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     id: 'g2',
     category: 'meme',
     categoryName: '搞笑梗',
+    scenario: 'gaoxiao',
     avatar: '🛸',
     roleTitle: '梗王',
     text: '泰裤辣！这牌型简直是绝绝子！',
@@ -298,24 +300,48 @@ export const HUMOROUS_VOICE_PHRASES: VoicePhrase[] = [
     rate: 1.15
   },
   {
-    id: 'g3',
-    category: 'meme',
-    categoryName: '搞笑梗',
-    avatar: '👻',
-    roleTitle: '震撼包',
-    text: '尊嘟假嘟？你居然拿十三水打我？',
-    pitch: 1.2,
-    rate: 1.18
+    id: 'c4',
+    category: 'child',
+    categoryName: '小孩',
+    scenario: 'gaoxiao',
+    avatar: '🎈',
+    roleTitle: '无敌小霸王',
+    text: '耶！赢了赢了，我要拿水数买超级大糖果！',
+    pitch: 1.68,
+    rate: 1.28
   },
   {
-    id: 'g4',
-    category: 'meme',
-    categoryName: '搞笑梗',
-    avatar: '🚀',
-    roleTitle: '火箭人',
-    text: '起飞！这一枪直接把你送上天！',
-    pitch: 1.08,
-    rate: 1.14
+    id: 'e2',
+    category: 'elder',
+    categoryName: '老人',
+    scenario: 'gaoxiao',
+    avatar: '🍵',
+    roleTitle: '太极宗师',
+    text: '年轻人不要太气盛，老夫要开始发功了！',
+    pitch: 0.68,
+    rate: 0.8
+  },
+  {
+    id: 'e3',
+    category: 'elder',
+    categoryName: '老人',
+    scenario: 'gaoxiao',
+    avatar: '📜',
+    roleTitle: '玄学老仙',
+    text: '稳住！老夫这套牌蕴含天地阴阳五行！',
+    pitch: 0.62,
+    rate: 0.78
+  },
+  {
+    id: 'r3',
+    category: 'roar',
+    categoryName: '怒吼',
+    scenario: 'gaoxiao',
+    avatar: '💣',
+    roleTitle: '狂暴战神',
+    text: '谁敢打我枪？老子直接同花顺通杀你！',
+    pitch: 0.48,
+    rate: 1.32
   }
 ];
 

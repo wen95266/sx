@@ -46,12 +46,11 @@ import {
   RotateCcw,
   Trophy,
   Smile,
-  Wifi,
-  WifiOff,
-  RefreshCw,
   Radio,
   Play,
-  Square
+  Square,
+  Users,
+  Bot
 } from 'lucide-react';
 
 interface GameTableProps {
@@ -87,6 +86,12 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Game Phases
   const [phase, setPhase] = useState<GamePhase>('ARRANGING');
   const [countdown, setCountdown] = useState(30);
+
+  // Hosting / Auto-Arrange Mode
+  const [isHosting, setIsHosting] = useState(false);
+
+  // Modal: Show all players list popup
+  const [showPlayersModal, setShowPlayersModal] = useState(false);
 
   // Network & Reconnect Status
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -267,11 +272,15 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Settlement & Showdown
   const [settlement, setSettlement] = useState<SettlementSummary | null>(null);
 
-  // Chat, Floating Danmu & Bubbles
+  // Chat, Floating Danmu, Recent Banner Message
   const [chatInput, setChatInput] = useState('');
   const [showChatDrawer, setShowChatDrawer] = useState(false);
   const [activeReactions, setActiveReactions] = useState<EmojiReaction[]>([]);
   const [speechBubbles, setSpeechBubbles] = useState<SpeechBubble[]>([]);
+  const [latestChatMessage, setLatestChatMessage] = useState<{ sender: string; text: string } | null>({
+    sender: '系统',
+    text: '十三水开局成功，祝各位好运连连！'
+  });
 
   // Real Voice Recording States
   const [isRecording, setIsRecording] = useState(false);
@@ -288,6 +297,102 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   const is8Players = currentRoom?.maxPlayers === 8;
   const activePlayerCount = is8Players ? 8 : 4;
+
+  // Cycle Through Smart Hand Combinations
+  const handleCycleSmartHand = useCallback(() => {
+    if (smartOptions.length === 0) return;
+    if (soundEnabled) SoundEffects.playCardClick();
+
+    const nextIndex = (currentOptionIndex + 1) % smartOptions.length;
+    setCurrentOptionIndex(nextIndex);
+    const opt = smartOptions[nextIndex];
+
+    setHeadCards(opt.head);
+    setMidCards(opt.middle);
+    setTailCards(opt.tail);
+  }, [smartOptions, currentOptionIndex, soundEnabled]);
+
+  // Submit Hand & Trigger Showdown
+  const handleSubmitHand = useCallback(() => {
+    if (soundEnabled) SoundEffects.playCardClick();
+
+    // Use current Dun or optimal smart arrangement
+    let finalHead = headCards.length === 3 ? headCards : smartOptions[0]?.head || headCards;
+    let finalMid = midCards.length === 5 ? midCards : smartOptions[0]?.middle || midCards;
+    let finalTail = tailCards.length === 5 ? tailCards : smartOptions[0]?.tail || tailCards;
+
+    // Safety fallback: ensure optimal valid arrangement
+    if (smartOptions.length > 0 && (finalHead.length !== 3 || finalMid.length !== 5 || finalTail.length !== 5)) {
+      finalHead = smartOptions[0].head;
+      finalMid = smartOptions[0].middle;
+      finalTail = smartOptions[0].tail;
+    }
+
+    const daoPaiResult = validateDaoPai(finalHead, finalMid, finalTail);
+
+    const updatedPlayers = players.map((p) => {
+      if (p.id === 'player_me') {
+        return {
+          ...p,
+          isReady: true,
+          arrangement: {
+            head: finalHead,
+            middle: finalMid,
+            tail: finalTail,
+            isDaoPai: daoPaiResult.isDaoPai,
+            daoPaiReason: daoPaiResult.reason
+          }
+        };
+      }
+      return p;
+    });
+
+    setPlayers(updatedPlayers);
+    setPhase('SHOWDOWN_HEAD');
+    if (soundEnabled) SoundEffects.playShowdownDing(false);
+
+    // Step 1: Head Showdown (前墩)
+    setTimeout(() => {
+      setPhase('SHOWDOWN_MID');
+      if (soundEnabled) SoundEffects.playShowdownDing(false);
+
+      // Step 2: Middle Showdown (中墩)
+      setTimeout(() => {
+        setPhase('SHOWDOWN_TAIL');
+        if (soundEnabled) SoundEffects.playShowdownDing(true);
+
+        // Step 3: Tail Showdown (后墩)
+        setTimeout(() => {
+          const activeParticipants = updatedPlayers.slice(0, activePlayerCount);
+          const result = calculateGameSettlement(activeParticipants);
+
+          setSettlement(result);
+          setPhase('ROUND_RESULT');
+
+          const myDelta = result.scores['player_me'] || 0;
+          const hasGunShot = result.gunShots && result.gunShots.length > 0;
+          const hasSlam = Boolean(result.grandSlamPlayerId);
+
+          if (hasSlam && soundEnabled) {
+            SoundEffects.playGunShot();
+            setTimeout(() => SoundEffects.playFanfare(), 400);
+          } else if (hasGunShot && soundEnabled) {
+            SoundEffects.playGunShot();
+          }
+
+          const updatedUser = recordGameResult(myDelta, myDelta > 0, 0, false, false);
+          setCurrentUser(updatedUser);
+
+          if (myDelta > 0) {
+            confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+            if (soundEnabled && !hasSlam) SoundEffects.playFanfare();
+          } else {
+            if (soundEnabled && !hasGunShot) SoundEffects.playWarning();
+          }
+        }, 1500);
+      }, 1500);
+    }, 1500);
+  }, [headCards, midCards, tailCards, smartOptions, players, activePlayerCount, soundEnabled]);
 
   // Deal 13 Cards to everyone & Auto Compute Best Hand (1 deck for 4p, 2 decks for 8p)
   const startNewRound = useCallback(() => {
@@ -412,13 +517,35 @@ export const GameTable: React.FC<GameTableProps> = ({
     };
   }, [soundEnabled]);
 
-  // Timer countdown
+  // Hosting (托管) / Auto-Arrange Effect: Automatically pick best hand and auto-submit
+  useEffect(() => {
+    if (isHosting && phase === 'ARRANGING') {
+      if (smartOptions.length > 0) {
+        setHeadCards(smartOptions[0].head);
+        setMidCards(smartOptions[0].middle);
+        setTailCards(smartOptions[0].tail);
+      }
+      // Auto submit after a brief 1.5s delay to simulate smart thinking
+      const hostTimer = setTimeout(() => {
+        handleSubmitHand();
+      }, 1500);
+      return () => clearTimeout(hostTimer);
+    }
+  }, [isHosting, phase, smartOptions, handleSubmitHand]);
+
+  // Timer countdown: Auto arrange and auto submit when time expires
   useEffect(() => {
     if (phase !== 'ARRANGING') return;
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
+          // 超时自动理牌并提交
+          if (smartOptions.length > 0) {
+            setHeadCards(smartOptions[0].head);
+            setMidCards(smartOptions[0].middle);
+            setTailCards(smartOptions[0].tail);
+          }
           handleSubmitHand();
           return 0;
         }
@@ -426,101 +553,14 @@ export const GameTable: React.FC<GameTableProps> = ({
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [phase, headCards, midCards, tailCards]);
-
-  // Cycle Through Smart Hand Combinations
-  const handleCycleSmartHand = () => {
-    if (smartOptions.length === 0) return;
-    if (soundEnabled) SoundEffects.playCardClick();
-
-    const nextIndex = (currentOptionIndex + 1) % smartOptions.length;
-    setCurrentOptionIndex(nextIndex);
-    const opt = smartOptions[nextIndex];
-
-    setHeadCards(opt.head);
-    setMidCards(opt.middle);
-    setTailCards(opt.tail);
-  };
-
-  // Submit Hand & Trigger Showdown
-  const handleSubmitHand = () => {
-    if (soundEnabled) SoundEffects.playCardClick();
-
-    const finalHead = headCards.length === 3 ? headCards : smartOptions[0]?.head || headCards;
-    const finalMid = midCards.length === 5 ? midCards : smartOptions[0]?.middle || midCards;
-    const finalTail = tailCards.length === 5 ? tailCards : smartOptions[0]?.tail || tailCards;
-
-    const daoPaiResult = validateDaoPai(finalHead, finalMid, finalTail);
-
-    const updatedPlayers = players.map((p) => {
-      if (p.id === 'player_me') {
-        return {
-          ...p,
-          isReady: true,
-          arrangement: {
-            head: finalHead,
-            middle: finalMid,
-            tail: finalTail,
-            isDaoPai: daoPaiResult.isDaoPai,
-            daoPaiReason: daoPaiResult.reason
-          }
-        };
-      }
-      return p;
-    });
-
-    setPlayers(updatedPlayers);
-    setPhase('SHOWDOWN_HEAD');
-    if (soundEnabled) SoundEffects.playShowdownDing(false);
-
-    // Step 1: Head Showdown (前墩)
-    setTimeout(() => {
-      setPhase('SHOWDOWN_MID');
-      if (soundEnabled) SoundEffects.playShowdownDing(false);
-
-      // Step 2: Middle Showdown (中墩)
-      setTimeout(() => {
-        setPhase('SHOWDOWN_TAIL');
-        if (soundEnabled) SoundEffects.playShowdownDing(true);
-
-        // Step 3: Tail Showdown (后墩)
-        setTimeout(() => {
-          const activeParticipants = updatedPlayers.slice(0, activePlayerCount);
-          const result = calculateGameSettlement(activeParticipants);
-
-          setSettlement(result);
-          setPhase('ROUND_RESULT');
-
-          const myDelta = result.scores['player_me'] || 0;
-          const hasGunShot = result.gunShots && result.gunShots.length > 0;
-          const hasSlam = Boolean(result.grandSlamPlayerId);
-
-          if (hasSlam && soundEnabled) {
-            SoundEffects.playGunShot();
-            setTimeout(() => SoundEffects.playFanfare(), 400);
-          } else if (hasGunShot && soundEnabled) {
-            SoundEffects.playGunShot();
-          }
-
-          const updatedUser = recordGameResult(myDelta, myDelta > 0, 0, false, false);
-          setCurrentUser(updatedUser);
-
-          if (myDelta > 0) {
-            confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-            if (soundEnabled && !hasSlam) SoundEffects.playFanfare();
-          } else {
-            if (soundEnabled && !hasGunShot) SoundEffects.playWarning();
-          }
-        }, 1500);
-      }, 1500);
-    }, 1500);
-  };
+  }, [phase, smartOptions, handleSubmitHand]);
 
   // Send message or quick phrase with Mandarin TTS voice
   const handleSendMessage = (textToSend?: string) => {
     const content = textToSend || chatInput.trim();
     if (!content) return;
 
+    const myName = currentUser.nickname || '我';
     const bubble: SpeechBubble = {
       id: `bubble_${Date.now()}`,
       playerId: 'player_me',
@@ -529,6 +569,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       createdAt: Date.now()
     };
     setSpeechBubbles((prev) => [...prev, bubble]);
+    setLatestChatMessage({ sender: myName, text: content });
     setChatInput('');
 
     if (soundEnabled) {
@@ -543,6 +584,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   // Send Voice Message (Real Mic Audio or Spoken Voice)
   const handleSendVoice = (voiceText: string, audioUrl?: string, duration = 2) => {
+    const myName = currentUser.nickname || '我';
     const bubble: SpeechBubble = {
       id: `bubble_${Date.now()}`,
       playerId: 'player_me',
@@ -553,6 +595,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       createdAt: Date.now()
     };
     setSpeechBubbles((prev) => [...prev, bubble]);
+    setLatestChatMessage({ sender: myName, text: `🎙️ ${voiceText}` });
 
     if (soundEnabled) {
       SoundEffects.playVoiceMessage(audioUrl, voiceText);
@@ -567,7 +610,6 @@ export const GameTable: React.FC<GameTableProps> = ({
   const startRecording = async () => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        // Fallback to voice picker if browser denies getUserMedia
         setShowVoicePicker(true);
         return;
       }
@@ -631,6 +673,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       emoji
     };
     setActiveReactions((prev) => [...prev, rx]);
+    setLatestChatMessage({ sender: currentUser.nickname || '我', text: `表情互动 ${emoji}` });
     if (soundEnabled) SoundEffects.playEmojiReaction();
     setTimeout(() => {
       setActiveReactions((prev) => prev.filter((r) => r.id !== rx.id));
@@ -724,11 +767,16 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         </div>
 
-        {/* Right: Network Status + Chip Count Pill + Chat Button */}
+        {/* Right: Player Count Badge (e.g. 8/8 或 4/4) + Gold Chips + Chat Button */}
         <div className="flex items-center gap-2">
-          {/* Network indicator */}
-          <div className={`p-1 rounded-full ${isOnline ? 'text-emerald-400' : 'text-rose-400 animate-pulse'}`} title={isOnline ? '网络正常' : '网络断开'}>
-            {isOnline ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+          {/* Player Count Badge (Replaces old WiFi icon) */}
+          <div
+            onClick={() => setShowPlayersModal(true)}
+            className="px-2 py-0.5 rounded-full bg-slate-800/90 border border-slate-700 hover:border-amber-400/60 text-slate-200 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95"
+            title="点击查看所有玩家"
+          >
+            <Users className="w-3 h-3 text-amber-400" />
+            <span>{activePlayerCount}/{is8Players ? '8' : '4'}</span>
           </div>
 
           {/* Gold Chip Pill */}
@@ -752,7 +800,6 @@ export const GameTable: React.FC<GameTableProps> = ({
       {reconnectTip && (
         <div className="px-3 py-1 bg-gradient-to-r from-indigo-900/90 to-slate-900/90 border-b border-indigo-500/50 text-indigo-200 text-[11px] font-medium flex items-center justify-between gap-2 z-30 shrink-0">
           <div className="flex items-center gap-1.5 truncate">
-            <RefreshCw className="w-3 h-3 text-amber-400 animate-spin shrink-0" />
             <span className="truncate">{reconnectTip}</span>
           </div>
           <button onClick={() => setReconnectTip(null)} className="text-slate-400 hover:text-white p-0.5">
@@ -761,33 +808,34 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* 2. HORIZONTAL PLAYER SEATS RIBBON (4 or 8 seats) */}
-      <div className="px-2 py-1 bg-[#090E1A] border-b border-slate-800/60 overflow-x-auto scrollbar-none flex items-center gap-1.5 z-20 shrink-0">
-        {players.slice(0, activePlayerCount).map((seat) => {
-          const isSelected = activeSeatId === seat.id;
-          const isMe = seat.id === 'player_me';
+      {/* 2. CHAT & MESSAGE BANNER WITH LEFT "查看玩家" BUTTON (Replaces old avatar banner) */}
+      <div className="px-2.5 py-1 bg-[#090E1A] border-b border-slate-800/80 flex items-center justify-between gap-2 z-20 shrink-0">
+        {/* Left: 查看玩家 button */}
+        <button
+          onClick={() => setShowPlayersModal(true)}
+          className="px-2.5 py-1 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0 shadow-xs"
+          title="点击弹窗查看所有玩家头像和名称"
+        >
+          <Users className="w-3.5 h-3.5 text-amber-400" />
+          <span>查看玩家</span>
+        </button>
 
-          return (
-            <button
-              key={seat.id}
-              onClick={() => setActiveSeatId(seat.id)}
-              className={`flex flex-col items-center justify-center min-w-[48px] py-0.5 px-1 rounded-xl border transition-all cursor-pointer ${
-                isSelected
-                  ? 'bg-amber-500/20 border-amber-400 shadow-md shadow-amber-500/20'
-                  : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 text-slate-400'
-              }`}
-            >
-              <div className="text-sm leading-none mb-0.5">{seat.avatar}</div>
-              <div
-                className={`text-[9px] font-medium truncate max-w-[42px] leading-tight ${
-                  isSelected ? 'text-amber-300 font-bold' : isMe ? 'text-slate-200' : 'text-slate-400'
-                }`}
-              >
-                {seat.name}
-              </div>
-            </button>
-          );
-        })}
+        {/* Right: Live Chat / Quick Phrase Display Area */}
+        <div
+          onClick={() => setShowChatDrawer(true)}
+          className="flex-1 bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1 flex items-center gap-2 overflow-hidden cursor-pointer hover:border-slate-700 transition-colors"
+          title="点击发送聊天或快捷短语"
+        >
+          <span className="text-[10px] font-bold text-amber-400 shrink-0">
+            {latestChatMessage?.sender ? `[${latestChatMessage.sender}]:` : '💬'}
+          </span>
+          <span className="text-xs text-slate-200 truncate flex-1 font-medium">
+            {latestChatMessage?.text || '点击右侧短语/语音进行互动交流...'}
+          </span>
+          <span className="text-[10px] text-slate-500 font-mono shrink-0">
+            {countdown}s
+          </span>
+        </div>
       </div>
 
       {/* 3. MAIN TABLE BODY: ENLARGED DUN SECTIONS (前墩 / 中墩 / 后墩) 绝对不允许滚动 */}
@@ -965,8 +1013,29 @@ export const GameTable: React.FC<GameTableProps> = ({
         )}
       </main>
 
-      {/* 4. CLEAN BOTTOM ACTIONS (ONLY DUAL BUTTONS, NO INPUT BAR) */}
+      {/* 4. CLEAN BOTTOM ACTIONS (DUAL BUTTONS + AUTO HOSTING TOGGLE) */}
       <footer className="w-full max-w-lg mx-auto p-2 bg-[#0F172A] border-t border-slate-800/80 flex items-center gap-2 z-30 shrink-0 shadow-lg">
+        {/* Button 0: 自动理牌 / 托管切换 */}
+        <button
+          type="button"
+          onClick={() => {
+            const nextHosting = !isHosting;
+            setIsHosting(nextHosting);
+            if (nextHosting) {
+              handleSendMessage('🤖 我开启了自动托管理牌模式！');
+            }
+          }}
+          className={`py-2.5 px-3 border font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95 shrink-0 ${
+            isHosting
+              ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold ring-2 ring-amber-400/40'
+              : 'bg-[#0B1120] hover:bg-slate-800 border-slate-700 text-slate-300'
+          }`}
+          title={isHosting ? '点击取消托管' : '点击开启自动理牌托管'}
+        >
+          <Bot className={`w-4 h-4 ${isHosting ? 'text-slate-950' : 'text-amber-400'}`} />
+          <span>{isHosting ? '托管中' : '自动理牌'}</span>
+        </button>
+
         {/* Button 1: 变换牌型 (Cycle combinations) */}
         <button
           onClick={handleCycleSmartHand}
@@ -988,7 +1057,80 @@ export const GameTable: React.FC<GameTableProps> = ({
         </button>
       </footer>
 
-      {/* 5. ULTRA-COMPACT BOTTOM-SHEET INTERACTIVE CHAT & VOICE RECORDER DRAWER */}
+      {/* 5. POPUP MODAL: ALL PLAYERS AVATAR & NAME (点击“查看玩家”或人数弹窗显示) */}
+      {showPlayersModal && (
+        <div
+          className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in cursor-pointer"
+          onClick={() => setShowPlayersModal(false)}
+        >
+          <div
+            className="bg-[#0F172A] border border-slate-700 rounded-2xl max-w-sm w-full p-4 shadow-2xl flex flex-col gap-3 cursor-default animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-amber-400" />
+                <span className="font-bold text-sm text-white">
+                  房间玩家列表 ({activePlayerCount}人)
+                </span>
+              </div>
+              <button
+                onClick={() => setShowPlayersModal(false)}
+                className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Players Grid */}
+            <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto pr-1">
+              {players.slice(0, activePlayerCount).map((p, idx) => {
+                const isMe = p.id === 'player_me';
+                return (
+                  <div
+                    key={p.id}
+                    className={`p-2.5 rounded-xl border flex items-center gap-2.5 transition-all ${
+                      isMe
+                        ? 'bg-amber-500/15 border-amber-400/50 shadow-xs'
+                        : 'bg-slate-900/90 border-slate-800'
+                    }`}
+                  >
+                    <div className="text-2xl w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center shadow-xs shrink-0">
+                      {p.avatar}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold text-xs text-white truncate">
+                          {p.name}
+                        </span>
+                        {isMe && (
+                          <span className="text-[10px] px-1 py-0.2 rounded bg-amber-500 text-slate-950 font-bold shrink-0">
+                            我
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                        {p.isAi ? '电脑玩家' : '在线玩家'} · 席位{idx + 1}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer close button */}
+            <button
+              onClick={() => setShowPlayersModal(false)}
+              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl cursor-pointer transition-colors active:scale-95"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 6. ULTRA-COMPACT BOTTOM-SHEET INTERACTIVE CHAT & VOICE RECORDER DRAWER */}
       {showChatDrawer && (
         <div
           className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex flex-col justify-end animate-in fade-in cursor-pointer"

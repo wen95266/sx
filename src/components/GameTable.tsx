@@ -22,7 +22,7 @@ import {
   calculateSmartArrangements,
   calculateGameSettlement
 } from '../utils/cardLogic';
-import { SoundEffects } from '../utils/audio';
+import { SoundEffects, VoicePersona, VoicePhrase, HUMOROUS_VOICE_PHRASES } from '../utils/audio';
 import { CardItem } from './CardItem';
 import {
   getStoredUser,
@@ -136,6 +136,43 @@ export const GameTable: React.FC<GameTableProps> = ({
 
   // Showdown View Mode in ROUND_RESULT: 'all_duns' (三墩全览) or 'matches' (对决明细)
   const [settlementTab, setSettlementTab] = useState<'all_duns' | 'matches'>('all_duns');
+
+  // Interactive Voice Drawer Filter States
+  const [selectedVoiceTab, setSelectedVoiceTab] = useState<VoicePersona | 'all'>('all');
+  const [voiceSearchQuery, setVoiceSearchQuery] = useState('');
+
+  // Send Humorous Voice Phrase with persona speech synthesis
+  const handleSendVoicePhrase = (vp: VoicePhrase) => {
+    const content = `【${vp.avatar} ${vp.roleTitle}】${vp.text}`;
+    const myName = currentUser.nickname || '我';
+    const bubble: SpeechBubble = {
+      id: `bubble_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      playerId: 'player_me',
+      text: content,
+      type: 'voice',
+      duration: 2,
+      createdAt: Date.now()
+    };
+    setSpeechBubbles((prev) => [...prev, bubble]);
+    setLatestChatMessage({ sender: myName, text: content });
+
+    if (soundEnabled) {
+      SoundEffects.speakMandarinWithRole(vp.text, vp.pitch, vp.rate, vp.category);
+    }
+
+    sendRoomChatApi({
+      roomId: currentRoom?.id || 'room_realtime_4',
+      senderId: currentUser.id || 'player_me',
+      senderName: myName,
+      text: content,
+      type: 'voice',
+      duration: 2
+    });
+
+    setTimeout(() => {
+      setSpeechBubbles((prev) => prev.filter((b) => b.id !== bubble.id));
+    }, 5500);
+  };
 
   // Real Seated Players (No AI bots filler)
   const [players, setPlayers] = useState<Player[]>([]);
@@ -2286,39 +2323,70 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* 7. ULTRA-COMPACT BOTTOM-SHEET INTERACTIVE CHAT & VOICE RECORDER DRAWER */}
+      {/* 7. HIGH-SHEET HUMOROUS VOICE & CHAT INTERACTIVE DRAWER (78vh Height) */}
       {showChatDrawer && (
         <div
-          className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex flex-col justify-end animate-in fade-in cursor-pointer"
+          className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex flex-col justify-end animate-in fade-in cursor-pointer"
           onClick={() => {
             if (isRecording) stopRecording();
             setShowChatDrawer(false);
           }}
         >
           <div
-            className="bg-[#0F172A] border-t border-slate-700 rounded-t-3xl max-w-lg mx-auto w-full p-3 shadow-2xl flex flex-col gap-2 cursor-default animate-in slide-in-from-bottom-8"
+            className="bg-[#0F172A] border-t-2 border-amber-500/80 rounded-t-3xl max-w-lg mx-auto w-full h-[78vh] p-3 sm:p-4 shadow-2xl flex flex-col justify-between gap-2.5 cursor-default animate-in slide-in-from-bottom-8 relative overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header: Title + Return Button */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+            {/* Drawer Drag Bar Handle */}
+            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto shrink-0 mb-0.5" />
+
+            {/* Header: Title + Sound Toggle + Close Button */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2 shrink-0">
               <div className="flex items-center gap-2">
-                <Smile className="w-4 h-4 text-amber-400" />
-                <span className="font-bold text-xs text-white">局内互动 · 语音对讲与聊天</span>
+                <div className="p-1.5 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl text-slate-950 font-black shadow-md text-base">
+                  🎭
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-white flex items-center gap-1.5">
+                    <span>幽默语音与互动对讲</span>
+                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 font-mono">
+                      全声线音效包
+                    </span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    男声 · 女声 · 老人 · 小孩 · 撒娇卖萌 · 怒吼咆哮 · 实时对讲
+                  </p>
+                </div>
               </div>
-              <button
-                onClick={() => {
-                  if (isRecording) stopRecording();
-                  setShowChatDrawer(false);
-                }}
-                className="px-2.5 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs rounded-full border border-amber-500/40 flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-xs"
-              >
-                <span>返回游戏</span>
-                <X className="w-3 h-3" />
-              </button>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSoundEnabled(!soundEnabled)}
+                  className={`px-2 py-1 border font-bold text-[11px] rounded-xl flex items-center gap-1 cursor-pointer transition-colors shadow-xs ${
+                    soundEnabled
+                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                      : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                  title="音效开关"
+                >
+                  {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                  <span>{soundEnabled ? '音效开' : '静音'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (isRecording) stopRecording();
+                    setShowChatDrawer(false);
+                  }}
+                  className="w-7 h-7 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full flex items-center justify-center cursor-pointer transition-colors shadow-xs"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            {/* Row 1: Real Mic Voice Recorder + Sound Toggle + Text Input + Send Button */}
-            <div className="flex items-center gap-1.5">
+            {/* Utility Row: Mic Recording + Text Input Bar */}
+            <div className="flex items-center gap-1.5 shrink-0 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800">
               {isRecording ? (
                 <button
                   type="button"
@@ -2332,27 +2400,13 @@ export const GameTable: React.FC<GameTableProps> = ({
                 <button
                   type="button"
                   onClick={startRecording}
-                  className="h-8 px-2.5 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 font-medium text-[11px] rounded-xl flex items-center gap-1 cursor-pointer transition-colors shrink-0"
-                  title="点击开始录音发送语音消息"
+                  className="h-8 px-2.5 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 font-bold text-[11px] rounded-xl flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0 shadow-xs"
+                  title="点击按键开始真实麦克风对讲"
                 >
-                  <Mic className="w-3.5 h-3.5" />
+                  <Mic className="w-3.5 h-3.5 text-emerald-400" />
                   <span>按键语音</span>
                 </button>
               )}
-
-              <button
-                type="button"
-                onClick={() => setSoundEnabled(!soundEnabled)}
-                className={`h-8 px-2 border font-medium text-[11px] rounded-xl flex items-center gap-1 cursor-pointer transition-colors shrink-0 ${
-                  soundEnabled
-                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                    : 'bg-slate-800 border-slate-700 text-slate-400'
-                }`}
-                title="音效开关"
-              >
-                {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-                <span>{soundEnabled ? '音效开' : '静音'}</span>
-              </button>
 
               <form
                 onSubmit={(e) => {
@@ -2366,73 +2420,163 @@ export const GameTable: React.FC<GameTableProps> = ({
                   type="text"
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="输入聊天内容..."
-                  className="w-full h-8 bg-slate-950 border border-slate-700 rounded-xl px-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                  placeholder="自定义输入聊天消息..."
+                  className="w-full h-8 bg-slate-900 border border-slate-800 rounded-xl px-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400 font-medium"
                 />
                 <button
                   type="submit"
-                  className="h-8 px-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                  className="h-8 px-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center cursor-pointer transition-colors shrink-0 shadow-xs"
                 >
-                  <Send className="w-3 h-3" />
+                  <Send className="w-3.5 h-3.5" />
                 </button>
               </form>
             </div>
 
-            {/* Quick Preset Voice Clips */}
-            <div className="space-y-1">
-              <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-                <Radio className="w-3 h-3" />
-                <span>经典语音对讲（点击直接语音大声播报）：</span>
-              </span>
-              <div className="grid grid-cols-2 gap-1.5">
-                {PRESET_VOICE_LINES.map((vl, idx) => (
+            {/* Voice Persona Category Tabs (Horizontal Scrollable) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none shrink-0 border-b border-slate-800/80">
+              {[
+                { id: 'all', name: '全部', icon: '🎭' },
+                { id: 'male', name: '男声', icon: '👨' },
+                { id: 'female', name: '女声', icon: '👩' },
+                { id: 'elder', name: '老人', icon: '👴' },
+                { id: 'child', name: '小孩', icon: '👶' },
+                { id: 'cute', name: '撒娇', icon: '💖' },
+                { id: 'roar', name: '怒吼', icon: '💥' },
+                { id: 'meme', name: '搞笑梗', icon: '🎪' }
+              ].map((tab) => {
+                const isActive = selectedVoiceTab === tab.id;
+                return (
                   <button
-                    key={idx}
+                    key={tab.id}
                     type="button"
-                    onClick={() => {
-                      handleSendVoice(vl.text, undefined, vl.sec);
-                      setShowChatDrawer(false);
-                    }}
-                    className="text-left px-2 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 hover:border-emerald-400 text-[11px] text-emerald-200 truncate rounded-xl flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                    onClick={() => setSelectedVoiceTab(tab.id as VoicePersona | 'all')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-xs ${
+                      isActive
+                        ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-black shadow-md'
+                        : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                    }`}
                   >
-                    <span>🎙️</span>
-                    <span className="truncate">{vl.label}</span>
+                    <span className="text-sm">{tab.icon}</span>
+                    <span>{tab.name}</span>
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
 
-            {/* 8 Emojis Bar */}
-            <div className="flex items-center justify-between gap-1 px-2 py-0.5 bg-slate-950/80 rounded-xl border border-slate-800/80">
-              {EMOJI_OPTIONS.map((em) => (
+            {/* Search Input for Voice Phrases */}
+            <div className="shrink-0 relative">
+              <input
+                type="text"
+                value={voiceSearchQuery}
+                onChange={(e) => setVoiceSearchQuery(e.target.value)}
+                placeholder="🔎 搜索幽默风趣短语关键词..."
+                className="w-full h-7.5 bg-slate-950/80 border border-slate-800 rounded-xl px-3 text-[11px] text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+              />
+              {voiceSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setVoiceSearchQuery('')}
+                  className="absolute right-2 top-1.5 text-slate-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* MAIN VOICE PHRASES GRID (Scrollable Flex-1 Container) */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2 scrollbar-none my-0.5">
+              {(() => {
+                const filtered = HUMOROUS_VOICE_PHRASES.filter((vp) => {
+                  const matchTab = selectedVoiceTab === 'all' || vp.category === selectedVoiceTab;
+                  const matchQuery =
+                    !voiceSearchQuery.trim() ||
+                    vp.text.includes(voiceSearchQuery) ||
+                    vp.roleTitle.includes(voiceSearchQuery) ||
+                    vp.categoryName.includes(voiceSearchQuery);
+                  return matchTab && matchQuery;
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="h-32 flex flex-col items-center justify-center text-slate-500 text-xs">
+                      <p>未找到匹配的幽默语音短语～</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {filtered.map((vp) => (
+                      <div
+                        key={vp.id}
+                        className="bg-slate-900/90 hover:bg-slate-850 border border-slate-800 hover:border-amber-500/50 rounded-2xl p-2.5 flex flex-col justify-between gap-1.5 transition-all shadow-md group"
+                      >
+                        {/* Header: Persona Role Badge + Category */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-base group-hover:scale-110 transition-transform">
+                              {vp.avatar}
+                            </span>
+                            <span className="font-extrabold text-xs text-amber-300">
+                              {vp.roleTitle}
+                            </span>
+                          </div>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-950 text-slate-400 font-mono border border-slate-800">
+                            {vp.categoryName}
+                          </span>
+                        </div>
+
+                        {/* Text */}
+                        <p className="text-xs font-bold text-slate-100 leading-snug line-clamp-2 my-0.5">
+                          {vp.text}
+                        </p>
+
+                        {/* Dual Action Buttons: Preview vs Send */}
+                        <div className="flex items-center gap-1.5 pt-1 border-t border-slate-800/80">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              SoundEffects.speakMandarinWithRole(vp.text, vp.pitch, vp.rate, vp.category);
+                            }}
+                            className="flex-1 py-1 bg-slate-950 hover:bg-slate-800 text-amber-400 font-bold text-[11px] rounded-xl border border-amber-500/30 flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95"
+                            title="点击本设备试听角色普通话语音"
+                          >
+                            <span>▶ 试听</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleSendVoicePhrase(vp);
+                              setShowChatDrawer(false);
+                            }}
+                            className="flex-1 py-1 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black text-[11px] rounded-xl flex items-center justify-center gap-1 cursor-pointer transition-all shadow-sm active:scale-95"
+                            title="广播发送此语音给房间所有玩家"
+                          >
+                            <Send className="w-3 h-3 text-slate-950 fill-current" />
+                            <span>广播发送</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Quick Emojis Bar (Footer) */}
+            <div className="flex items-center justify-between gap-1 px-2 py-1 bg-slate-950/90 rounded-2xl border border-slate-800 shrink-0">
+              {['🔥', '👍', '😎', '🤣', '😭', '🤯', '👑', '💸'].map((em) => (
                 <button
                   key={em}
                   type="button"
                   onClick={() => {
-                    handleSendEmoji(em);
+                    handleSendMessage(em);
                     setShowChatDrawer(false);
                   }}
-                  className="text-lg hover:scale-125 transition-transform p-0.5 flex items-center justify-center cursor-pointer active:scale-90"
+                  className="text-xl hover:scale-125 transition-transform p-0.5 flex items-center justify-center cursor-pointer active:scale-90"
                 >
                   {em}
-                </button>
-              ))}
-            </div>
-
-            {/* Quick Phrases Grid */}
-            <div className="grid grid-cols-2 gap-1">
-              {QUICK_PHRASES.map((phrase, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    handleSendMessage(phrase);
-                    setShowChatDrawer(false);
-                  }}
-                  className="text-left px-2 py-1.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-800/80 hover:border-amber-500/40 rounded-xl text-[10px] text-slate-300 hover:text-amber-300 truncate transition-colors cursor-pointer active:scale-95"
-                  title={phrase}
-                >
-                  {phrase}
                 </button>
               ))}
             </div>

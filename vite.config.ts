@@ -7,24 +7,6 @@ import { VitePWA } from 'vite-plugin-pwa';
 function roomServerPlugin() {
   const roomsMemory: Record<string, any> = {};
 
-  const DEFAULT_BOTS_4 = [
-    { id: 'bot_zhiduoxing', name: '智多星', avatar: '🤖' },
-    { id: 'bot_dongfang', name: '东方雀圣', avatar: '🧙' },
-    { id: 'bot_ximen', name: '西门吹水', avatar: '🐉' },
-    { id: 'bot_beiming', name: '北冥神手', avatar: '🥷' }
-  ];
-
-  const DEFAULT_BOTS_8 = [
-    { id: 'bot_zhiduoxing', name: '智多星', avatar: '🤖' },
-    { id: 'bot_dongfang', name: '东方雀圣', avatar: '🧙' },
-    { id: 'bot_ximen', name: '西门吹水', avatar: '🐉' },
-    { id: 'bot_beiming', name: '北冥神手', avatar: '🥷' },
-    { id: 'bot_quewang', name: '雀王争霸', avatar: '🦁' },
-    { id: 'bot_shisan', name: '十三太保', avatar: '🐲' },
-    { id: 'bot_dugu', name: '独孤求胜', avatar: '🦹' },
-    { id: 'bot_jiutian', name: '九天玄女', avatar: '👧' }
-  ];
-
   return {
     name: 'room-server-plugin',
     configureServer(server: any) {
@@ -38,14 +20,28 @@ function roomServerPlugin() {
             const body = bodyStr ? JSON.parse(bodyStr) : {};
 
             if (req.url === '/api/room/sync' && req.method === 'POST') {
-              const { roomId = 'room_realtime_4', maxPlayers = 4, userId, nickname, avatar, phone, isSubmitted, arrangement, action } = body;
+              const {
+                roomId = 'room_realtime_4',
+                maxPlayers = 4,
+                userId,
+                nickname,
+                avatar,
+                phone,
+                targetSeatIndex,
+                isSubmitted,
+                arrangement,
+                action,
+                dealtCardsMap
+              } = body;
 
               if (!roomsMemory[roomId]) {
                 roomsMemory[roomId] = {
                   roomId,
                   maxPlayers,
-                  realPlayersMap: {},
+                  seats: Array(maxPlayers).fill(null),
                   chatBubbles: [],
+                  phase: 'WAITING',
+                  dealerUserId: null,
                   lastUpdated: Date.now()
                 };
               }
@@ -53,51 +49,102 @@ function roomServerPlugin() {
               const room = roomsMemory[roomId];
               room.maxPlayers = maxPlayers;
 
-              const now = Date.now();
-              // Clean up players inactive for > 15s
-              for (const pid in room.realPlayersMap) {
-                if (now - room.realPlayersMap[pid].lastSeen > 15000) {
-                  delete room.realPlayersMap[pid];
+              // Expand or adjust seats array if maxPlayers changed
+              if (room.seats.length !== maxPlayers) {
+                const old = room.seats;
+                room.seats = Array(maxPlayers).fill(null);
+                for (let i = 0; i < Math.min(old.length, maxPlayers); i++) {
+                  room.seats[i] = old[i];
                 }
               }
 
-              if (action === 'leave' && userId) {
-                delete room.realPlayersMap[userId];
-              } else if (userId) {
-                const existing = room.realPlayersMap[userId] || {};
-                room.realPlayersMap[userId] = {
-                  id: userId,
-                  name: nickname || '玩家',
-                  avatar: avatar || '😎',
-                  phone,
-                  isAi: false,
-                  isReady: true,
-                  isSubmitted: isSubmitted ?? existing.isSubmitted ?? false,
-                  arrangement: arrangement || existing.arrangement || { head: [], middle: [], tail: [], isDaoPai: false },
-                  lastSeen: now
-                };
+              const now = Date.now();
+
+              // Clean up players inactive for > 15s
+              for (let i = 0; i < maxPlayers; i++) {
+                if (room.seats[i] && now - room.seats[i].lastSeen > 15000) {
+                  room.seats[i] = null;
+                }
               }
 
-              const realPlayers = Object.values(room.realPlayersMap) as any[];
-              const botsPool = maxPlayers === 8 ? DEFAULT_BOTS_8 : DEFAULT_BOTS_4;
-              const fullPlayers = [];
+              // Handle leave
+              if (action === 'leave' && userId) {
+                for (let i = 0; i < maxPlayers; i++) {
+                  if (room.seats[i]?.id === userId) {
+                    room.seats[i] = null;
+                  }
+                }
+              } else if (userId) {
+                // Find if user already seated
+                let existingSeatIndex = room.seats.findIndex((s: any) => s && s.id === userId);
 
-              for (let i = 0; i < maxPlayers; i++) {
-                if (i < realPlayers.length) {
-                  fullPlayers.push({ ...realPlayers[i], seatIndex: i });
-                } else {
-                  const bTemplate = botsPool[(i - realPlayers.length) % botsPool.length];
-                  fullPlayers.push({
-                    id: `bot_${roomId}_seat${i}`,
-                    name: bTemplate.name,
-                    avatar: bTemplate.avatar,
-                    isAi: true,
-                    seatIndex: i,
+                if (existingSeatIndex === -1 && typeof targetSeatIndex === 'number' && targetSeatIndex >= 0 && targetSeatIndex < maxPlayers) {
+                  // If specified seat is free, sit there
+                  if (!room.seats[targetSeatIndex]) {
+                    existingSeatIndex = targetSeatIndex;
+                  }
+                }
+
+                // Fallback: if not seated and target is taken or not specified, pick first free seat
+                if (existingSeatIndex === -1 && action === 'join') {
+                  existingSeatIndex = room.seats.findIndex((s: any) => s === null);
+                }
+
+                if (existingSeatIndex !== -1) {
+                  const existing = room.seats[existingSeatIndex] || {};
+                  room.seats[existingSeatIndex] = {
+                    id: userId,
+                    name: nickname || '玩家',
+                    avatar: avatar || '😎',
+                    phone,
+                    seatIndex: existingSeatIndex,
+                    isAi: false,
                     isReady: true,
-                    isSubmitted: true,
-                    arrangement: { head: [], middle: [], tail: [], isDaoPai: false },
+                    isSubmitted: isSubmitted ?? existing.isSubmitted ?? false,
+                    arrangement: arrangement || existing.arrangement || { head: [], middle: [], tail: [], isDaoPai: false },
+                    cards: dealtCardsMap?.[userId] || existing.cards || [],
                     lastSeen: now
-                  });
+                  };
+                }
+              }
+
+              // Count active seated real players
+              const activeSeats = room.seats.filter((s: any) => s !== null);
+              const realPlayersCount = activeSeats.length;
+
+              // Ensure host designation (first seated real player is host)
+              let hostUserId = null;
+              if (activeSeats.length > 0) {
+                // Keep existing host if still present, or pick first seated player
+                const currentHost = activeSeats.find((s: any) => s.isHost);
+                if (currentHost) {
+                  hostUserId = currentHost.id;
+                } else {
+                  activeSeats[0].isHost = true;
+                  hostUserId = activeSeats[0].id;
+                }
+              }
+
+              // Ensure all players have correct isHost flag
+              for (let i = 0; i < maxPlayers; i++) {
+                if (room.seats[i]) {
+                  room.seats[i].isHost = room.seats[i].id === hostUserId;
+                }
+              }
+
+              // Update room phase
+              if (realPlayersCount < 2) {
+                room.phase = 'WAITING';
+              } else if (action === 'dealCards') {
+                room.phase = 'ARRANGING';
+                room.dealerUserId = userId;
+                if (dealtCardsMap) {
+                  for (let i = 0; i < maxPlayers; i++) {
+                    if (room.seats[i] && dealtCardsMap[room.seats[i].id]) {
+                      room.seats[i].cards = dealtCardsMap[room.seats[i].id];
+                      room.seats[i].isSubmitted = false;
+                    }
+                  }
                 }
               }
 
@@ -105,8 +152,10 @@ function roomServerPlugin() {
               res.end(JSON.stringify({
                 roomId,
                 maxPlayers,
-                realPlayersCount: realPlayers.length,
-                players: fullPlayers,
+                realPlayersCount,
+                hostUserId,
+                phase: room.phase,
+                seats: room.seats,
                 chatBubbles: room.chatBubbles || [],
                 lastUpdated: now
               }));
@@ -202,6 +251,7 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(import.meta.dirname ?? '.', '.'),
       },
+      dedupe: ['react', 'react-dom'],
     },
     server: {
       // Allow Cloudflare Tunnel domains

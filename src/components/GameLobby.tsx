@@ -33,7 +33,7 @@ import { MatchHistoryModal } from './MatchHistoryModal';
 
 interface GameLobbyProps {
   currentUser: UserProfile;
-  onEnterRoom: (room: LobbyRoom) => void;
+  onEnterRoom: (room: LobbyRoom, targetSeatIndex?: number) => void;
   onOpenAuth: () => void;
   onOpenBotGuide?: () => void;
   onUpdateUser?: (user: UserProfile) => void;
@@ -158,7 +158,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
     onOpenAuth();
   };
 
-  const handleSelectRoom = (room: LobbyRoom) => {
+  const handleSelectRoom = (room: LobbyRoom, seatIndex = 0) => {
     if (!currentUser.isLoggedIn) {
       onOpenAuth();
       return;
@@ -167,14 +167,14 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
       const topUp = room.minChips - currentUser.chips + 500;
       const updated = addChips(topUp);
       if (onUpdateUser) onUpdateUser(updated);
-      setToastTip(`⚠️ 筹码不足，已自动补发 +${topUp.toLocaleString()} 水！正在进入对战场...`);
+      setToastTip(`⚠️ 筹码不足，已自动补发 +${topUp.toLocaleString()} 水！正在进入对战场 ${seatIndex + 1}号位...`);
       setTimeout(() => {
         setToastTip(null);
-        onEnterRoom(room);
+        onEnterRoom(room, seatIndex);
       }, 1000);
       return;
     }
-    onEnterRoom(room);
+    onEnterRoom(room, seatIndex);
   };
 
   return (
@@ -362,13 +362,27 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                 </div>
               </div>
 
-              <button
-                onClick={() => handleSelectRoom(ROOM_REALTIME_4)}
-                className="w-full py-2 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 shrink-0"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>进入四人实时场 (一键入座)</span>
-              </button>
+              {/* 4人实时场 选座按钮区 */}
+              <div className="space-y-1 mt-1">
+                <div className="text-[10px] sm:text-[11px] font-bold text-amber-300 flex items-center justify-between">
+                  <span>🪑 选择 1~4 号座位入座 (禁止盲进):</span>
+                  <span className="text-[9px] text-amber-400/80 font-normal">首位入座自动为房主 👑</span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[0, 1, 2, 3].map((seatIdx) => (
+                    <button
+                      key={seatIdx}
+                      type="button"
+                      onClick={() => handleSelectRoom(ROOM_REALTIME_4, seatIdx)}
+                      className="p-1.5 bg-slate-950/90 hover:bg-slate-800 border border-amber-500/50 hover:border-amber-400 text-amber-300 font-bold text-xs rounded-xl flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all active:scale-95 shadow-md group"
+                    >
+                      <span className="text-xs group-hover:scale-110 transition-transform">🪑</span>
+                      <span className="text-[10px] font-black">{seatIdx + 1}号位</span>
+                      <span className="text-[9px] text-emerald-400 font-mono">点击入座</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* 卡片 2: 八人实时场 (2副牌 104张 特别刺激) */}
@@ -389,7 +403,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                   </div>
                 </div>
                 <span className="text-[10px] text-purple-300 font-mono font-bold bg-purple-950/60 px-2 py-0.5 rounded-full border border-purple-500/30">
-                  7/8 人就绪
+                  至少2真人开局
                 </span>
               </div>
 
@@ -408,13 +422,27 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                 </div>
               </div>
 
-              <button
-                onClick={() => handleSelectRoom(ROOM_REALTIME_8)}
-                className="w-full py-2 bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-600 hover:from-purple-400 hover:to-indigo-400 text-white font-black text-xs sm:text-sm rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 shrink-0"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>进入八人实时场 (两副扑克)</span>
-              </button>
+              {/* 8人实时场 选座按钮区 */}
+              <div className="space-y-1 mt-1">
+                <div className="text-[10px] sm:text-[11px] font-bold text-purple-300 flex items-center justify-between">
+                  <span>🪑 选择 1~8 号座位入座:</span>
+                  <span className="text-[9px] text-purple-300/80 font-normal">首位入座自动为房主 👑</span>
+                </div>
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1">
+                  {[0, 1, 2, 3, 4, 5, 6, 7].map((seatIdx) => (
+                    <button
+                      key={seatIdx}
+                      type="button"
+                      onClick={() => handleSelectRoom(ROOM_REALTIME_8, seatIdx)}
+                      className="p-1 bg-slate-950/90 hover:bg-slate-800 border border-purple-500/50 hover:border-purple-400 text-purple-300 font-bold text-xs rounded-xl flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all active:scale-95 shadow-md group"
+                    >
+                      <span className="text-xs group-hover:scale-110 transition-transform">🪑</span>
+                      <span className="text-[10px] font-black">{seatIdx + 1}号位</span>
+                      <span className="text-[8px] text-emerald-400 font-mono">入座</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </>
         )}
@@ -459,13 +487,27 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                 </div>
               </div>
 
-              <button
-                onClick={() => handleSelectRoom(ROOM_SCHEDULED_4)}
-                className="w-full py-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 shrink-0"
-              >
-                <Calendar className="w-3.5 h-3.5" />
-                <span>预订四人席位 (准点发牌)</span>
-              </button>
+              {/* 4人预约场 选座按钮区 */}
+              <div className="space-y-1 mt-1">
+                <div className="text-[10px] sm:text-[11px] font-bold text-sky-300 flex items-center justify-between">
+                  <span>🪑 选择 1~4 号预约席位入座:</span>
+                  <span className="text-[9px] text-sky-300/80 font-normal">首位预订者为房主 👑</span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[0, 1, 2, 3].map((seatIdx) => (
+                    <button
+                      key={seatIdx}
+                      type="button"
+                      onClick={() => handleSelectRoom(ROOM_SCHEDULED_4, seatIdx)}
+                      className="p-1.5 bg-slate-950/90 hover:bg-slate-800 border border-sky-500/50 hover:border-sky-400 text-sky-300 font-bold text-xs rounded-xl flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all active:scale-95 shadow-md group"
+                    >
+                      <span className="text-xs group-hover:scale-110 transition-transform">🪑</span>
+                      <span className="text-[10px] font-black">{seatIdx + 1}号位</span>
+                      <span className="text-[9px] text-sky-400 font-mono">预订</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* 卡片 4: 八人预约场 (2副牌 104张 大师赛) */}
@@ -486,7 +528,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                   </div>
                 </div>
                 <span className="text-[10px] text-amber-400 font-mono font-bold bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-500/30">
-                  7/8 人已订
+                  至少2真人开局
                 </span>
               </div>
 
@@ -505,13 +547,27 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                 </div>
               </div>
 
-              <button
-                onClick={() => handleSelectRoom(ROOM_SCHEDULED_8)}
-                className="w-full py-2 bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 shrink-0"
-              >
-                <Trophy className="w-3.5 h-3.5" />
-                <span>预订八人大师赛 (两副扑克)</span>
-              </button>
+              {/* 8人预约场 选座按钮区 */}
+              <div className="space-y-1 mt-1">
+                <div className="text-[10px] sm:text-[11px] font-bold text-amber-300 flex items-center justify-between">
+                  <span>🪑 选择 1~8 号大师赛席位预订:</span>
+                  <span className="text-[9px] text-amber-300/80 font-normal">首位预订者为房主 👑</span>
+                </div>
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1">
+                  {[0, 1, 2, 3, 4, 5, 6, 7].map((seatIdx) => (
+                    <button
+                      key={seatIdx}
+                      type="button"
+                      onClick={() => handleSelectRoom(ROOM_SCHEDULED_8, seatIdx)}
+                      className="p-1 bg-slate-950/90 hover:bg-slate-800 border border-amber-500/50 hover:border-amber-400 text-amber-300 font-bold text-xs rounded-xl flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all active:scale-95 shadow-md group"
+                    >
+                      <span className="text-xs group-hover:scale-110 transition-transform">🪑</span>
+                      <span className="text-[10px] font-black">{seatIdx + 1}号位</span>
+                      <span className="text-[8px] text-amber-400 font-mono">预订</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </>
         )}

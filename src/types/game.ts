@@ -83,8 +83,9 @@ export interface Player {
 }
 
 export type GamePhase =
+  | 'WAITING'      // 等待至少2名玩家入座开局
   | 'LOBBY'        // 准备 / 组桌
-  | 'DEALING'      // 发牌动画
+  | 'DEALING'      // 发牌动画 / 洗牌切牌
   | 'ARRANGING'    // 玩家理牌 (倒计时 / 智能推荐)
   | 'SHOWDOWN_HEAD'// 头道比牌
   | 'SHOWDOWN_MID' // 中道比牌

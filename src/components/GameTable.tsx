@@ -71,6 +71,7 @@ import {
 
 interface GameTableProps {
   currentRoom?: LobbyRoom;
+  targetSeatIndex?: number;
   onBackToLobby: () => void;
   onUpdateUser?: (user: UserProfile) => void;
 }
@@ -95,6 +96,7 @@ const PRESET_VOICE_LINES = [
 
 export const GameTable: React.FC<GameTableProps> = ({
   currentRoom,
+  targetSeatIndex = 0,
   onBackToLobby,
   onUpdateUser
 }) => {
@@ -105,9 +107,16 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [sortBySuit, setSortBySuit] = useState(false);
   const [showBankruptcyBonus, setShowBankruptcyBonus] = useState(false);
 
-  // Game Phases: ARRANGING -> SHOWDOWN_HEAD -> SHOWDOWN_MID -> SHOWDOWN_TAIL -> ROUND_RESULT
-  const [phase, setPhase] = useState<GamePhase>('ARRANGING');
+  // Game Phases: WAITING -> ARRANGING -> SHOWDOWN_HEAD -> SHOWDOWN_MID -> SHOWDOWN_TAIL -> ROUND_RESULT
+  const [phase, setPhase] = useState<GamePhase>('WAITING');
   const [countdown, setCountdown] = useState(30);
+
+  // Shuffle & Cut Modal State
+  const [showShuffleCutModal, setShowShuffleCutModal] = useState(false);
+  const [cutPosition, setCutPosition] = useState<number>(26);
+  const [isShuffling, setIsShuffling] = useState(false);
+  const [hostUserId, setHostUserId] = useState<string | null>(null);
+  const [dealerSeatIndex, setDealerSeatIndex] = useState<number>(0);
 
   // Multi-card selection for manual arranging
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
@@ -128,170 +137,8 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Showdown View Mode in ROUND_RESULT: 'all_duns' (三墩全览) or 'matches' (对决明细)
   const [settlementTab, setSettlementTab] = useState<'all_duns' | 'matches'>('all_duns');
 
-  // 8 Player Seats
-  const [activeSeatId, setActiveSeatId] = useState('player_me');
-  const [players, setPlayers] = useState<Player[]>([
-    {
-      id: 'player_me',
-      name: currentUser.nickname || '我',
-      avatar: currentUser.avatar || '😎',
-      isAi: false,
-      totalScore: 0,
-      roundScore: 0,
-      isReady: false,
-      cards: [],
-      arrangement: { head: [], middle: [], tail: [], isDaoPai: false },
-      roundDetails: {
-        headScore: 0,
-        middleScore: 0,
-        tailScore: 0,
-        bonusScore: 0,
-        gunShotCount: 0,
-        isGrandSlam: false,
-        specialHandPoints: 0
-      }
-    },
-    {
-      id: 'player_bot1',
-      name: '智多星',
-      avatar: '🤖',
-      isAi: true,
-      totalScore: 0,
-      roundScore: 0,
-      isReady: true,
-      cards: [],
-      arrangement: { head: [], middle: [], tail: [], isDaoPai: false },
-      roundDetails: {
-        headScore: 0,
-        middleScore: 0,
-        tailScore: 0,
-        bonusScore: 0,
-        gunShotCount: 0,
-        isGrandSlam: false,
-        specialHandPoints: 0
-      }
-    },
-    {
-      id: 'player_bot2',
-      name: '玩家3',
-      avatar: '🐲',
-      isAi: true,
-      totalScore: 0,
-      roundScore: 0,
-      isReady: true,
-      cards: [],
-      arrangement: { head: [], middle: [], tail: [], isDaoPai: false },
-      roundDetails: {
-        headScore: 0,
-        middleScore: 0,
-        tailScore: 0,
-        bonusScore: 0,
-        gunShotCount: 0,
-        isGrandSlam: false,
-        specialHandPoints: 0
-      }
-    },
-    {
-      id: 'player_bot3',
-      name: '玩家4',
-      avatar: '🦊',
-      isAi: true,
-      totalScore: 0,
-      roundScore: 0,
-      isReady: true,
-      cards: [],
-      arrangement: { head: [], middle: [], tail: [], isDaoPai: false },
-      roundDetails: {
-        headScore: 0,
-        middleScore: 0,
-        tailScore: 0,
-        bonusScore: 0,
-        gunShotCount: 0,
-        isGrandSlam: false,
-        specialHandPoints: 0
-      }
-    },
-    {
-      id: 'player_bot4',
-      name: '玩家5',
-      avatar: '🐰',
-      isAi: true,
-      totalScore: 0,
-      roundScore: 0,
-      isReady: true,
-      cards: [],
-      arrangement: { head: [], middle: [], tail: [], isDaoPai: false },
-      roundDetails: {
-        headScore: 0,
-        middleScore: 0,
-        tailScore: 0,
-        bonusScore: 0,
-        gunShotCount: 0,
-        isGrandSlam: false,
-        specialHandPoints: 0
-      }
-    },
-    {
-      id: 'player_bot5',
-      name: '玩家6',
-      avatar: '🐼',
-      isAi: true,
-      totalScore: 0,
-      roundScore: 0,
-      isReady: true,
-      cards: [],
-      arrangement: { head: [], middle: [], tail: [], isDaoPai: false },
-      roundDetails: {
-        headScore: 0,
-        middleScore: 0,
-        tailScore: 0,
-        bonusScore: 0,
-        gunShotCount: 0,
-        isGrandSlam: false,
-        specialHandPoints: 0
-      }
-    },
-    {
-      id: 'player_bot6',
-      name: '玩家7',
-      avatar: '🦅',
-      isAi: true,
-      totalScore: 0,
-      roundScore: 0,
-      isReady: true,
-      cards: [],
-      arrangement: { head: [], middle: [], tail: [], isDaoPai: false },
-      roundDetails: {
-        headScore: 0,
-        middleScore: 0,
-        tailScore: 0,
-        bonusScore: 0,
-        gunShotCount: 0,
-        isGrandSlam: false,
-        specialHandPoints: 0
-      }
-    },
-    {
-      id: 'player_bot7',
-      name: '玩家8',
-      avatar: '🐟',
-      isAi: true,
-      totalScore: 0,
-      roundScore: 0,
-      isReady: true,
-      cards: [],
-      arrangement: { head: [], middle: [], tail: [], isDaoPai: false },
-      roundDetails: {
-        headScore: 0,
-        middleScore: 0,
-        tailScore: 0,
-        bonusScore: 0,
-        gunShotCount: 0,
-        isGrandSlam: false,
-        specialHandPoints: 0
-      }
-    }
-  ]);
+  // Real Seated Players (No AI bots filler)
+  const [players, setPlayers] = useState<Player[]>([]);
 
   // Card Duns for user (unrestricted card count during arranging, total = 13)
   const [headCards, setHeadCards] = useState<Card[]>([]);
@@ -310,7 +157,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [speechBubbles, setSpeechBubbles] = useState<SpeechBubble[]>([]);
   const [latestChatMessage, setLatestChatMessage] = useState<{ sender: string; text: string } | null>({
     sender: '系统',
-    text: '十三水开局成功，祝各位好运连连！'
+    text: '十三水房间已连接，等待至少2名真实玩家选择座位入座！'
   });
 
   // Real Voice Recording States
@@ -326,12 +173,11 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Sound switch
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Realtime Single Room Sync State ("真人优先，缺额人机补位")
+  // Realtime Single Room Sync State
   const [realPlayersCount, setRealPlayersCount] = useState<number>(1);
 
   const is8Players = currentRoom?.maxPlayers === 8;
-  const activePlayerCount = is8Players ? 8 : 4;
-  const activeParticipants = players.slice(0, activePlayerCount);
+  const maxRoomSeats = is8Players ? 8 : 4;
 
   // Realtime Single Room Synchronization Heartbeat
   useEffect(() => {
@@ -350,7 +196,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           nickname: currentUser.nickname || '我',
           avatar: currentUser.avatar || '😎',
           phone: currentUser.phone,
-          isSubmitted: phase !== 'ARRANGING',
+          isSubmitted: phase !== 'WAITING' && phase !== 'ARRANGING' ? true : (headCards.length === 3 && midCards.length === 5 && tailCards.length === 5),
           arrangement: { head: headCards, middle: midCards, tail: tailCards, isDaoPai: false },
           action
         });
@@ -358,29 +204,62 @@ export const GameTable: React.FC<GameTableProps> = ({
         if (!isMounted) return;
 
         setRealPlayersCount(syncedState.realPlayersCount || 1);
+        if (syncedState.hostUserId) setHostUserId(syncedState.hostUserId);
 
-        // Update players seats while keeping local cards & scores intact
-        setPlayers((prev) => {
-          const syncedPlayersMap = new Map(syncedState.players.map((sp) => [sp.seatIndex, sp]));
-          return prev.map((p, idx) => {
-            const sp = syncedPlayersMap.get(idx);
-            if (!sp) return p;
+        // Map seats to real players (no AI bots filler)
+        if (syncedState.seats) {
+          const mappedPlayers: Player[] = [];
+          syncedState.seats.forEach((sp) => {
+            if (sp) {
+              const isMe = sp.id === userId || sp.id === 'player_me';
 
-            const isMe = idx === 0 || sp.id === userId;
-            return {
-              ...p,
-              id: isMe ? 'player_me' : sp.id,
-              name: isMe ? currentUser.nickname || '我' : sp.name,
-              avatar: isMe ? currentUser.avatar || '😎' : sp.avatar,
-              isAi: isMe ? false : sp.isAi,
-              isReady: sp.isReady,
-              cards: p.cards,
-              arrangement: isMe
-                ? p.arrangement
-                : (sp.arrangement && sp.arrangement.head?.length === 3 ? sp.arrangement : p.arrangement)
-            };
+              // Handle dealCards transition for non-dealer player
+              if (isMe && sp.cards && sp.cards.length === 13 && phase === 'WAITING' && syncedState.phase === 'ARRANGING') {
+                const myCards = sortCards(sp.cards);
+                const options = calculateSmartArrangements(myCards);
+                setSmartOptions(options);
+                setCurrentOptionIndex(0);
+                if (options.length > 0) {
+                  setHeadCards(options[0].head);
+                  setMidCards(options[0].middle);
+                  setTailCards(options[0].tail);
+                } else {
+                  setHeadCards(myCards.slice(0, 3));
+                  setMidCards(myCards.slice(3, 8));
+                  setTailCards(myCards.slice(8, 13));
+                }
+                setPhase('ARRANGING');
+                if (soundEnabled) SoundEffects.playDealCard();
+              }
+
+              mappedPlayers.push({
+                id: isMe ? 'player_me' : sp.id,
+                name: isMe ? (currentUser.nickname || '我') : sp.name,
+                avatar: isMe ? (currentUser.avatar || '😎') : sp.avatar,
+                isAi: false,
+                isReady: true,
+                totalScore: 0,
+                roundScore: 0,
+                cards: isMe
+                  ? (headCards.length + midCards.length + tailCards.length === 13 ? [...headCards, ...midCards, ...tailCards] : sp.cards || [])
+                  : (sp.cards || []),
+                arrangement: isMe
+                  ? { head: headCards, middle: midCards, tail: tailCards, isDaoPai: false }
+                  : (sp.arrangement && sp.arrangement.head?.length === 3 ? sp.arrangement : { head: [], middle: [], tail: [], isDaoPai: false }),
+                roundDetails: {
+                  headScore: 0,
+                  middleScore: 0,
+                  tailScore: 0,
+                  bonusScore: 0,
+                  gunShotCount: 0,
+                  isGrandSlam: false,
+                  specialHandPoints: 0
+                }
+              });
+            }
           });
-        });
+          setPlayers(mappedPlayers);
+        }
 
         // Update chat feeds if any
         if (syncedState.chatBubbles && syncedState.chatBubbles.length > 0) {
@@ -405,7 +284,10 @@ export const GameTable: React.FC<GameTableProps> = ({
       clearInterval(timer);
       doSync('leave');
     };
-  }, [currentRoom, currentUser, phase, headCards, midCards, tailCards]);
+  }, [currentRoom, currentUser, phase, headCards, midCards, tailCards, soundEnabled]);
+
+  const activeParticipants = players;
+  const activePlayerCount = players.length;
 
   // Toggle card selection
   const handleCardClick = (card: Card) => {
@@ -716,18 +598,56 @@ export const GameTable: React.FC<GameTableProps> = ({
     executeSubmitShowdown(headCards, midCards, tailCards, false);
   }, [headCards, midCards, tailCards, executeSubmitShowdown, soundEnabled]);
 
-  // Deal 13 Cards to everyone & Auto Compute Best Hand (1 deck for 4p, 2 decks for 8p)
-  const startNewRound = useCallback(() => {
+  // Trigger visual shuffle effect
+  const handleShuffleDeck = () => {
+    setIsShuffling(true);
+    if (soundEnabled) SoundEffects.playCardClick();
+    setTimeout(() => {
+      setIsShuffling(false);
+    }, 600);
+  };
+
+  // Dealer confirms shuffle, cut position, and deals 13 cards to seated real players
+  const handleConfirmCutAndDeal = async () => {
+    if (realPlayersCount < 2) {
+      setArrangeError('⚠️ 房间里至少需要 2 位真人玩家入座才能开始发牌！');
+      return;
+    }
+
     if (soundEnabled) SoundEffects.playDealCard();
 
-    const is8p = currentRoom?.maxPlayers === 8;
-    const deckCount = is8p ? 2 : 1;
-    const activeCount = is8p ? 8 : 4;
-    const deck = shuffleDeck(createDeck(deckCount));
+    const maxP = currentRoom?.maxPlayers || 4;
+    const deckCount = maxP === 8 ? 2 : 1;
+    const totalCards = deckCount * 52;
 
-    const handMe = sortCards(deck.slice(0, 13));
+    const fullDeck = shuffleDeck(createDeck(deckCount));
+    const validCut = Math.max(5, Math.min(cutPosition, totalCards - 5));
+    const cutDeck = [...fullDeck.slice(validCut), ...fullDeck.slice(0, validCut)];
 
-    const options = calculateSmartArrangements(handMe);
+    const dealtCardsMap: Record<string, Card[]> = {};
+    players.forEach((p, idx) => {
+      const pHand = sortCards(cutDeck.slice(idx * 13, (idx + 1) * 13));
+      const targetId = p.id === 'player_me' ? (currentUser.id || 'player_me') : p.id;
+      dealtCardsMap[targetId] = pHand;
+      dealtCardsMap['player_me'] = pHand;
+    });
+
+    const roomId = currentRoom?.id || 'room_realtime_4';
+    const userId = currentUser.id || 'player_me';
+
+    await syncRoomStateApi({
+      roomId,
+      maxPlayers: maxP,
+      userId,
+      nickname: currentUser.nickname || '我',
+      avatar: currentUser.avatar || '😎',
+      phone: currentUser.phone,
+      action: 'dealCards',
+      dealtCardsMap
+    });
+
+    const myHand = dealtCardsMap[userId] || dealtCardsMap['player_me'] || sortCards(cutDeck.slice(0, 13));
+    const options = calculateSmartArrangements(myHand);
     setSmartOptions(options);
     setCurrentOptionIndex(0);
 
@@ -736,49 +656,30 @@ export const GameTable: React.FC<GameTableProps> = ({
       setMidCards(options[0].middle);
       setTailCards(options[0].tail);
     } else {
-      setHeadCards(handMe.slice(0, 3));
-      setMidCards(handMe.slice(3, 8));
-      setTailCards(handMe.slice(8, 13));
+      setHeadCards(myHand.slice(0, 3));
+      setMidCards(myHand.slice(3, 8));
+      setTailCards(myHand.slice(8, 13));
     }
 
-    setSelectedCardIds([]);
-    setArrangeError(null);
-    setShowDaoPaiModal(false);
-
-    // Set player arrangements dynamically for 4 or 8 players
-    const updatedPlayers = players.map((p, idx) => {
-      if (idx >= activeCount) return p;
-
-      const pHand = idx === 0 ? handMe : sortCards(deck.slice(idx * 13, (idx + 1) * 13));
-      const pOpts = calculateSmartArrangements(pHand);
-      const chosen = pOpts[0] || {
-        head: pHand.slice(0, 3),
-        middle: pHand.slice(3, 8),
-        tail: pHand.slice(8, 13)
-      };
-
-      return {
-        ...p,
-        name: idx === 0 ? currentUser.nickname || '我' : p.name,
-        avatar: idx === 0 ? currentUser.avatar || '😎' : p.avatar,
-        cards: pHand,
-        isReady: idx !== 0,
-        roundScore: 0,
-        arrangement: {
-          head: chosen.head,
-          middle: chosen.middle,
-          tail: chosen.tail,
-          isDaoPai: false
-        }
-      };
-    });
-
-    setPlayers(updatedPlayers);
-    setSettlement(null);
-    setCountdown(30);
     setPhase('ARRANGING');
+    setShowShuffleCutModal(false);
+
+    if (soundEnabled) {
+      SoundEffects.speakMandarin('洗牌切牌完成，轮流发牌开始，请各位玩家理牌！');
+    }
+  };
+
+  // Reset for next round with rotational dealing
+  const handleNextRound = () => {
+    setHeadCards([]);
+    setMidCards([]);
+    setTailCards([]);
+    setSmartOptions([]);
+    setSettlement(null);
+    setDealerSeatIndex((prev) => (players.length > 0 ? (prev + 1) % players.length : 0));
+    setPhase('WAITING');
     setRoundNumber((prev) => prev + 1);
-  }, [soundEnabled, players, currentUser, currentRoom]);
+  };
 
   // Initial Mount: Detect Disconnection & Auto Recover Session
   useEffect(() => {
@@ -796,7 +697,7 @@ export const GameTable: React.FC<GameTableProps> = ({
       setReconnectTip('⚡ 已自动断线重连，恢复对局界面与牌型！');
       setTimeout(() => setReconnectTip(null), 3500);
     } else {
-      startNewRound();
+      setPhase('WAITING');
     }
   }, []);
 
@@ -1302,9 +1203,100 @@ export const GameTable: React.FC<GameTableProps> = ({
         })}
 
         {/* ========================================================= */}
+        {/* VIEW 0: WAITING ROOM SEATS TABLE VIEW */}
+        {/* ========================================================= */}
+        {phase === 'WAITING' && (
+          <div className="flex-1 flex flex-col justify-around bg-[#0A0F1D] border-2 border-amber-500/40 rounded-3xl p-3 shadow-2xl relative overflow-hidden">
+            <div className="text-center">
+              <h2 className="text-sm font-extrabold text-amber-300 flex items-center justify-center gap-1.5">
+                <span>🀄 {currentRoom?.name || '十三水多人竞技场'}</span>
+                <span className="text-[10px] px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono border border-emerald-500/30">
+                  {realPlayersCount}/{maxRoomSeats} 人在线
+                </span>
+              </h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {realPlayersCount < 2 ? '等待更多真人玩家在首页选择座位入座 (至少需要2人开局)' : '人数已就绪！请房主/庄家点击下方洗牌切牌并发牌'}
+              </p>
+            </div>
+
+            {/* Room Seats Grid */}
+            <div className={`grid ${is8Players ? 'grid-cols-4 gap-2' : 'grid-cols-2 gap-2.5'} my-2`}>
+              {Array.from({ length: maxRoomSeats }).map((_, seatIdx) => {
+                const seatedPlayer = players[seatIdx];
+                const isHost = seatedPlayer && (seatedPlayer.id === hostUserId || seatIdx === 0);
+                const isDealer = seatIdx === dealerSeatIndex;
+
+                return (
+                  <div
+                    key={seatIdx}
+                    className={`p-2.5 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all ${
+                      seatedPlayer
+                        ? 'bg-gradient-to-b from-slate-900 to-amber-950/30 border-amber-500/50 shadow-md'
+                        : 'bg-slate-950/60 border-slate-800 border-dashed text-slate-600'
+                    }`}
+                  >
+                    {seatedPlayer ? (
+                      <>
+                        <div className="relative">
+                          <div className="text-2xl w-10 h-10 rounded-full bg-slate-950 border border-amber-400/60 flex items-center justify-center shadow-md">
+                            {seatedPlayer.avatar}
+                          </div>
+                          {isHost && (
+                            <span className="absolute -top-1.5 -right-1.5 px-1 py-0.2 bg-amber-400 text-slate-950 text-[9px] font-extrabold rounded-full shadow flex items-center gap-0.5">
+                              <Crown className="w-2.5 h-2.5 fill-current" />
+                              <span>房主</span>
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-white truncate max-w-[100px]">
+                          {seatedPlayer.name}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {isDealer && (
+                            <span className="text-[9px] px-1.5 py-0.2 bg-purple-500/20 text-purple-300 font-bold rounded border border-purple-500/40">
+                              🀄 庄家
+                            </span>
+                          )}
+                          <span className="text-[9px] text-emerald-400 font-mono font-bold">
+                            已入座
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-lg text-slate-600">
+                          🪑
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-500">{seatIdx + 1}号位</span>
+                        <span className="text-[9px] text-slate-600">等待入座</span>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Waiting prompt */}
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2 text-center text-xs text-slate-300">
+              {realPlayersCount < 2 ? (
+                <div className="flex items-center justify-center gap-2 text-amber-400 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  <span>等待第二位真人玩家选择座位加入...</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2 text-emerald-400 font-bold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>满足2人开局条件，首位玩家为房主（庄家），请点击洗牌切牌并发牌！</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
         {/* VIEW A: MANUAL ARRANGING PHASE (前墩 / 中墩 / 后墩) */}
         {/* ========================================================= */}
-        {!isShowdownPhase && (
+        {phase === 'ARRANGING' && (
           <>
             {/* DUN 1: 前墩 (Target: 3 cards) */}
             <div
@@ -1876,7 +1868,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
                 {/* Restart Button */}
                 <button
-                  onClick={startNewRound}
+                  onClick={handleNextRound}
                   className="w-full py-2.5 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-extrabold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20 cursor-pointer active:scale-95 shrink-0"
                 >
                   <RotateCcw className="w-4 h-4 stroke-[2.5]" />
@@ -1939,8 +1931,28 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* 4. CLEAN BOTTOM ACTIONS (DUAL BUTTONS + AUTO HOSTING TOGGLE) */}
-      {!isShowdownPhase && (
+      {/* 4. CLEAN BOTTOM ACTIONS (WAITING OR ARRANGING) */}
+      {phase === 'WAITING' && (
+        <footer className="w-full max-w-lg mx-auto p-2 bg-[#0F172A] border-t border-slate-800/80 flex items-center gap-2 z-30 shrink-0 shadow-lg">
+          {realPlayersCount < 2 ? (
+            <div className="w-full py-2.5 bg-slate-900 border border-slate-800 text-slate-400 font-bold text-xs rounded-xl text-center flex items-center justify-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span>⏳ 等待至少 2 位真实玩家选择座位入座 (当前 {realPlayersCount}/{maxRoomSeats})...</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowShuffleCutModal(true)}
+              className="w-full py-3 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-extrabold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-xl cursor-pointer transition-all active:scale-95"
+            >
+              <Sparkles className="w-4 h-4 text-slate-950 fill-current" />
+              <span>🔀 庄家洗牌与切牌 (房主发牌)</span>
+            </button>
+          )}
+        </footer>
+      )}
+
+      {phase === 'ARRANGING' && (
         <footer className="w-full max-w-lg mx-auto p-2 bg-[#0F172A] border-t border-slate-800/80 flex items-center gap-2 z-30 shrink-0 shadow-lg">
           {/* Button 0: 自动理牌 / 托管切换 */}
           <button
@@ -1982,6 +1994,156 @@ export const GameTable: React.FC<GameTableProps> = ({
             <span>提交牌型 (3/5/5)</span>
           </button>
         </footer>
+      )}
+
+      {/* SHUFFLE & CUT CARD MODAL */}
+      {showShuffleCutModal && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-3 animate-in fade-in cursor-pointer"
+          onClick={() => setShowShuffleCutModal(false)}
+        >
+          <div
+            className="bg-[#0F172A] border-2 border-amber-500/80 rounded-3xl max-w-md w-full p-4 shadow-2xl flex flex-col gap-3.5 cursor-default animate-in zoom-in-95 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl text-slate-950 font-black shadow-md text-base">
+                  🔀
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-white flex items-center gap-1.5">
+                    <span>庄家洗牌与切牌控制台</span>
+                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
+                      房主发牌
+                    </span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    轮流发牌机制 · {is8Players ? '2副牌 (104张)' : '1副牌 (52张)'} · 庄家可自定义切牌
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowShuffleCutModal(false)}
+                className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Step 1: 洗牌演示区 */}
+            <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-200">1. 洗牌阶段 (扑克乱序重组)</span>
+                <button
+                  type="button"
+                  onClick={handleShuffleDeck}
+                  className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs rounded-xl border border-amber-500/40 flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                >
+                  <RotateCcw className={`w-3.5 h-3.5 ${isShuffling ? 'animate-spin' : ''}`} />
+                  <span>{isShuffling ? '正在洗牌...' : '重新洗牌'}</span>
+                </button>
+              </div>
+
+              {/* Animated Deck Preview */}
+              <div className="h-16 bg-slate-900/90 border border-slate-800 rounded-xl flex items-center justify-center relative overflow-hidden">
+                <div className={`flex items-center justify-center -space-x-8 transition-all duration-300 ${isShuffling ? 'scale-105 rotate-1' : ''}`}>
+                  {['🀄', '♠️', '♥️', '♣️', '♦️', '🎴'].map((symbol, idx) => (
+                    <div
+                      key={idx}
+                      className={`w-10 h-14 bg-gradient-to-br from-slate-100 to-slate-200 text-slate-900 border-2 border-slate-300 rounded-lg flex flex-col items-center justify-center shadow-lg font-black text-xs ${
+                        isShuffling ? 'animate-bounce' : ''
+                      }`}
+                      style={{ animationDelay: `${idx * 80}ms` }}
+                    >
+                      <span className="text-amber-600 font-serif text-sm">{symbol}</span>
+                      <span className="text-[9px] text-slate-600 font-mono">十三水</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Step 2: 交互切牌区 */}
+            <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-200">2. 切牌阶段 (滑动调整切牌点)</span>
+                <span className="text-amber-400 font-mono font-bold text-xs">
+                  第 {cutPosition} 张处切牌
+                </span>
+              </div>
+
+              <input
+                type="range"
+                min={5}
+                max={(is8Players ? 104 : 52) - 5}
+                value={cutPosition}
+                onChange={(e) => setCutPosition(Number(e.target.value))}
+                className="w-full accent-amber-400 cursor-pointer h-2 bg-slate-800 rounded-lg"
+              />
+
+              {/* Stack split preview */}
+              <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                <div className="p-2 bg-slate-900 border border-slate-800 rounded-xl flex flex-col items-center">
+                  <span className="text-[10px] text-slate-400">上叠扑克 (移至底层)</span>
+                  <span className="text-amber-400 font-mono font-bold text-sm mt-0.5">{cutPosition} 张</span>
+                </div>
+                <div className="p-2 bg-slate-900 border border-slate-800 rounded-xl flex flex-col items-center">
+                  <span className="text-[10px] text-slate-400">下叠扑克 (移至顶层)</span>
+                  <span className="text-emerald-400 font-mono font-bold text-sm mt-0.5">
+                    {(is8Players ? 104 : 52) - cutPosition} 张
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick Cut Preset Buttons */}
+              <div className="grid grid-cols-4 gap-1 text-[10px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setCutPosition(Math.floor((is8Players ? 104 : 52) * 0.25))}
+                  className="py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-lg cursor-pointer"
+                >
+                  1/4 处
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCutPosition(Math.floor((is8Players ? 104 : 52) * 0.5))}
+                  className="py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-lg cursor-pointer"
+                >
+                  对半切
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCutPosition(Math.floor((is8Players ? 104 : 52) * 0.75))}
+                  className="py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-lg cursor-pointer"
+                >
+                  3/4 处
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tot = is8Players ? 104 : 52;
+                    setCutPosition(Math.floor(Math.random() * (tot - 10)) + 5);
+                  }}
+                  className="py-1 bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-800 rounded-lg cursor-pointer"
+                >
+                  🎲 随机切
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm & Deal Action */}
+            <button
+              type="button"
+              onClick={handleConfirmCutAndDeal}
+              className="w-full py-3 bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-xl cursor-pointer transition-all active:scale-95"
+            >
+              <Sparkles className="w-4 h-4 fill-current text-slate-950" />
+              <span>🎴 确认切牌并轮流发牌 (每人13张)</span>
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 5. POPUP MODAL: ALL PLAYERS AVATAR & NAME */}

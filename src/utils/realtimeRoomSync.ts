@@ -7,6 +7,7 @@ export interface SyncedPlayer {
   avatar: string;
   phone?: string;
   isAi: boolean;
+  isHost?: boolean;
   seatIndex: number;
   totalScore: number;
   roundScore: number;
@@ -27,70 +28,16 @@ export interface SyncedRoomState {
   maxPlayers: number;
   activePlayerCount: number;
   realPlayersCount: number;
+  hostUserId?: string;
   roundNumber: number;
   phase: GamePhase;
   countdown: number;
+  seats: (SyncedPlayer | null)[];
   players: SyncedPlayer[];
   chatBubbles: SpeechBubble[];
   reactions: EmojiReaction[];
   settlement: SettlementSummary | null;
   lastUpdated: number;
-}
-
-const DEFAULT_BOTS_4 = [
-  { id: 'bot_zhiduoxing', name: '智多星', avatar: '🤖' },
-  { id: 'bot_dongfang', name: '东方雀圣', avatar: '🧙' },
-  { id: 'bot_ximen', name: '西门吹水', avatar: '🐉' },
-  { id: 'bot_beiming', name: '北冥神手', avatar: '🥷' }
-];
-
-const DEFAULT_BOTS_8 = [
-  { id: 'bot_zhiduoxing', name: '智多星', avatar: '🤖' },
-  { id: 'bot_dongfang', name: '东方雀圣', avatar: '🧙' },
-  { id: 'bot_ximen', name: '西门吹水', avatar: '🐉' },
-  { id: 'bot_beiming', name: '北冥神手', avatar: '🥷' },
-  { id: 'bot_quewang', name: '雀王争霸', avatar: '🦁' },
-  { id: 'bot_shisan', name: '十三太保', avatar: '🐲' },
-  { id: 'bot_dugu', name: '独孤求胜', avatar: '🦹' },
-  { id: 'bot_jiutian', name: '九天玄女', avatar: '👧' }
-];
-
-// Memory cache on server/client side for instant sync
-const roomStatesInMemory: Record<string, SyncedRoomState> = {};
-
-// Helper to fill remaining seats with AI bots
-export function getFilledRoomPlayers(roomId: string, maxPlayers: number, realPlayers: SyncedPlayer[]): SyncedPlayer[] {
-  const botsPool = maxPlayers === 8 ? DEFAULT_BOTS_8 : DEFAULT_BOTS_4;
-  const filled: SyncedPlayer[] = [];
-
-  // Place real players in order
-  for (let i = 0; i < maxPlayers; i++) {
-    if (i < realPlayers.length) {
-      filled.push({
-        ...realPlayers[i],
-        seatIndex: i,
-        isAi: false
-      });
-    } else {
-      const botTemplate = botsPool[(i - realPlayers.length) % botsPool.length];
-      filled.push({
-        id: `bot_${roomId}_seat${i}`,
-        name: botTemplate.name,
-        avatar: botTemplate.avatar,
-        isAi: true,
-        seatIndex: i,
-        totalScore: 0,
-        roundScore: 0,
-        isReady: true,
-        isSubmitted: true,
-        cards: [],
-        arrangement: { head: [], middle: [], tail: [], isDaoPai: false },
-        lastSeen: Date.now()
-      });
-    }
-  }
-
-  return filled;
 }
 
 // Client API: Sync with Server or BroadcastChannel
@@ -101,12 +48,12 @@ export async function syncRoomStateApi(payload: {
   nickname: string;
   avatar: string;
   phone?: string;
+  targetSeatIndex?: number;
   isSubmitted?: boolean;
   arrangement?: { head: Card[]; middle: Card[]; tail: Card[]; isDaoPai: boolean };
-  action?: 'join' | 'leave' | 'submit' | 'heartbeat' | 'nextRound';
+  action?: 'join' | 'leave' | 'submit' | 'heartbeat' | 'nextRound' | 'dealCards';
+  dealtCardsMap?: Record<string, Card[]>;
 }): Promise<SyncedRoomState> {
-  const { roomId, maxPlayers, userId, nickname, avatar, phone, isSubmitted, arrangement, action } = payload;
-
   try {
     const res = await fetch('/api/room/sync', {
       method: 'POST',
@@ -116,13 +63,16 @@ export async function syncRoomStateApi(payload: {
 
     if (res.ok) {
       const state: SyncedRoomState = await res.json();
+      // Keep players property populated for backward compatibility
+      if (!state.players && state.seats) {
+        state.players = state.seats.filter((s): s is SyncedPlayer => s !== null);
+      }
       return state;
     }
   } catch (err) {
     console.warn('[RealtimeSync] Server endpoint fallback to local sync:', err);
   }
 
-  // Fallback to local BroadcastChannel/localStorage sync
   return syncRoomLocally(payload);
 }
 
@@ -160,11 +110,13 @@ function syncRoomLocally(payload: {
   nickname: string;
   avatar: string;
   phone?: string;
+  targetSeatIndex?: number;
   isSubmitted?: boolean;
   arrangement?: { head: Card[]; middle: Card[]; tail: Card[]; isDaoPai: boolean };
-  action?: 'join' | 'leave' | 'submit' | 'heartbeat' | 'nextRound';
+  action?: 'join' | 'leave' | 'submit' | 'heartbeat' | 'nextRound' | 'dealCards';
+  dealtCardsMap?: Record<string, Card[]>;
 }): SyncedRoomState {
-  const { roomId, maxPlayers, userId, nickname, avatar, phone, isSubmitted, arrangement, action } = payload;
+  const { roomId, maxPlayers, userId, nickname, avatar, phone, targetSeatIndex, isSubmitted, arrangement, action, dealtCardsMap } = payload;
   const storageKey = `shisanshui_synced_room_${roomId}`;
 
   let currentRoom: SyncedRoomState;
@@ -179,46 +131,86 @@ function syncRoomLocally(payload: {
     currentRoom = createNewSyncedRoomState(roomId, maxPlayers);
   }
 
-  // Filter out offline players (no heartbeat in 15 seconds)
+  if (!currentRoom.seats || currentRoom.seats.length !== maxPlayers) {
+    currentRoom.seats = Array(maxPlayers).fill(null);
+  }
+
   const now = Date.now();
-  let realPlayers = (currentRoom.players || []).filter(
-    (p) => !p.isAi && p.id !== userId && now - p.lastSeen < 15000
-  );
 
-  if (action !== 'leave') {
-    // Add/Update current user
-    const mePlayer: SyncedPlayer = {
-      id: userId,
-      name: nickname,
-      avatar: avatar,
-      phone: phone,
-      isAi: false,
-      seatIndex: 0,
-      totalScore: 0,
-      roundScore: 0,
-      isReady: true,
-      isSubmitted: isSubmitted || false,
-      cards: [],
-      arrangement: arrangement || { head: [], middle: [], tail: [], isDaoPai: false },
-      lastSeen: now
-    };
-
-    const existingIdx = realPlayers.findIndex((p) => p.id === userId);
-    if (existingIdx >= 0) {
-      realPlayers[existingIdx] = { ...realPlayers[existingIdx], ...mePlayer, lastSeen: now };
-    } else {
-      realPlayers.push(mePlayer);
+  // Clean offline seats
+  for (let i = 0; i < maxPlayers; i++) {
+    if (currentRoom.seats[i] && now - currentRoom.seats[i]!.lastSeen > 15000) {
+      currentRoom.seats[i] = null;
     }
   }
 
-  // Cap real players to maxPlayers
-  realPlayers = realPlayers.slice(0, maxPlayers);
+  if (action === 'leave' && userId) {
+    for (let i = 0; i < maxPlayers; i++) {
+      if (currentRoom.seats[i]?.id === userId) {
+        currentRoom.seats[i] = null;
+      }
+    }
+  } else if (userId) {
+    let seatIdx = currentRoom.seats.findIndex((s) => s && s.id === userId);
+    if (seatIdx === -1 && typeof targetSeatIndex === 'number' && targetSeatIndex >= 0 && targetSeatIndex < maxPlayers) {
+      if (!currentRoom.seats[targetSeatIndex]) {
+        seatIdx = targetSeatIndex;
+      }
+    }
+    if (seatIdx === -1 && action === 'join') {
+      seatIdx = currentRoom.seats.findIndex((s) => s === null);
+    }
 
-  // Fill empty seats with bots ("真人优先，人机补位")
-  const fullPlayers = getFilledRoomPlayers(roomId, maxPlayers, realPlayers);
+    if (seatIdx !== -1) {
+      const existing = currentRoom.seats[seatIdx];
+      currentRoom.seats[seatIdx] = {
+        id: userId,
+        name: nickname || '玩家',
+        avatar: avatar || '😎',
+        phone,
+        isAi: false,
+        seatIndex: seatIdx,
+        totalScore: 0,
+        roundScore: 0,
+        isReady: true,
+        isSubmitted: isSubmitted ?? existing?.isSubmitted ?? false,
+        cards: dealtCardsMap?.[userId] || existing?.cards || [],
+        arrangement: arrangement || existing?.arrangement || { head: [], middle: [], tail: [], isDaoPai: false },
+        lastSeen: now
+      };
+    }
+  }
 
-  currentRoom.players = fullPlayers;
-  currentRoom.realPlayersCount = realPlayers.length;
+  const activeSeats = currentRoom.seats.filter((s): s is SyncedPlayer => s !== null);
+  currentRoom.realPlayersCount = activeSeats.length;
+  currentRoom.players = activeSeats;
+
+  // Host assignment
+  if (activeSeats.length > 0) {
+    const currentHost = activeSeats.find((s) => s.isHost);
+    const hostId = currentHost ? currentHost.id : activeSeats[0].id;
+    currentRoom.hostUserId = hostId;
+    for (let i = 0; i < maxPlayers; i++) {
+      if (currentRoom.seats[i]) {
+        currentRoom.seats[i]!.isHost = currentRoom.seats[i]!.id === hostId;
+      }
+    }
+  }
+
+  if (activeSeats.length < 2) {
+    currentRoom.phase = 'WAITING';
+  } else if (action === 'dealCards') {
+    currentRoom.phase = 'ARRANGING';
+    if (dealtCardsMap) {
+      for (let i = 0; i < maxPlayers; i++) {
+        if (currentRoom.seats[i] && dealtCardsMap[currentRoom.seats[i]!.id]) {
+          currentRoom.seats[i]!.cards = dealtCardsMap[currentRoom.seats[i]!.id];
+          currentRoom.seats[i]!.isSubmitted = false;
+        }
+      }
+    }
+  }
+
   currentRoom.lastUpdated = now;
 
   try {
@@ -233,10 +225,11 @@ function createNewSyncedRoomState(roomId: string, maxPlayers: number): SyncedRoo
     roomId,
     maxPlayers,
     activePlayerCount: maxPlayers,
-    realPlayersCount: 1,
+    realPlayersCount: 0,
     roundNumber: 1,
-    phase: 'ARRANGING',
+    phase: 'WAITING',
     countdown: 30,
+    seats: Array(maxPlayers).fill(null),
     players: [],
     chatBubbles: [],
     reactions: [],

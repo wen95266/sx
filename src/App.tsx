@@ -24,6 +24,7 @@ export default function App() {
   const [selectedRoom, setSelectedRoom] = useState<LobbyRoom | null>(
     existingSession?.room || null
   );
+  const [selectedSeatIndex, setSelectedSeatIndex] = useState<number>(0);
 
   // Auto-detect private room parameter from URL (?room=6688)
   useEffect(() => {
@@ -59,8 +60,9 @@ export default function App() {
       {gameViewMode === 'lobby' ? (
         <GameLobby
           currentUser={currentUser}
-          onEnterRoom={(room) => {
+          onEnterRoom={(room, seatIdx) => {
             setSelectedRoom(room);
+            setSelectedSeatIndex(seatIdx ?? 0);
             setGameViewMode('table');
           }}
           onOpenAuth={() => setShowAuthModal(true)}
@@ -70,6 +72,7 @@ export default function App() {
       ) : (
         <GameTable
           currentRoom={selectedRoom || undefined}
+          targetSeatIndex={selectedSeatIndex}
           onBackToLobby={() => {
             clearMatchSession();
             setGameViewMode('lobby');

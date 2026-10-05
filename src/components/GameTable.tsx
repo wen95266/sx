@@ -53,12 +53,12 @@ interface GameTableProps {
 const EMOJI_OPTIONS = ['🔥', '👍', '😎', '🤣', '😭', '🤯', '👑', '💸'];
 
 const QUICK_PHRASES = [
-  '快点出牌啊，我等得花儿都谢了！⏱️',
-  '思考这么久，难道拿了十三水？🤔',
-  '这把牌太神，我都不好意思赢你们！😎',
-  '准备好水数，这把我要通杀全场！💥',
-  '手下留情，别打我枪啊大佬！😭',
-  '给个机会，下把一定逆天翻盘！✨'
+  '⚡ 快点出牌啊，我等得花儿都谢了！',
+  '🤔 思考这么久，难道拿了十三水？',
+  '😎 这把牌太神，我都不好意思赢你们！',
+  '💥 准备好水数，这把我要通杀全场！',
+  '😭 手下留情，别打我枪啊大佬！',
+  '✨ 给个机会，下把一定逆天翻盘！'
 ];
 
 export const GameTable: React.FC<GameTableProps> = ({
@@ -746,111 +746,121 @@ export const GameTable: React.FC<GameTableProps> = ({
         </button>
       </footer>
 
-      {/* 5. ALL-IN-ONE INTERACTIVE CHAT & QUICK PHRASES DRAWER */}
+      {/* 5. ULTRA-COMPACT BOTTOM-SHEET INTERACTIVE CHAT & QUICK PHRASES DRAWER */}
       {showChatDrawer && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 animate-in fade-in">
-          <div className="bg-[#0F172A] border border-slate-700 rounded-3xl max-w-md w-full p-4 shadow-2xl flex flex-col gap-3 max-h-[85vh] animate-in slide-in-from-bottom-6">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <div
+          className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex flex-col justify-end animate-in fade-in cursor-pointer"
+          onClick={() => setShowChatDrawer(false)}
+        >
+          {/* Bottom Sheet Drawer Card */}
+          <div
+            className="bg-[#0F172A] border-t border-slate-700 rounded-t-3xl max-w-lg mx-auto w-full p-3.5 shadow-2xl flex flex-col gap-2.5 cursor-default animate-in slide-in-from-bottom-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header: Title + Big Return Button */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <div className="flex items-center gap-2">
-                <Smile className="w-5 h-5 text-amber-400" />
-                <span className="font-bold text-sm text-white">局内互动 & 快捷聊天</span>
+                <Smile className="w-4 h-4 text-amber-400" />
+                <span className="font-bold text-xs text-white">局内互动 & 快捷聊天</span>
               </div>
               <button
                 onClick={() => setShowChatDrawer(false)}
-                className="p-1.5 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full cursor-pointer transition-colors"
+                className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs rounded-full border border-amber-500/40 flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-xs"
               >
-                <X className="w-4 h-4" />
+                <span>返回游戏</span>
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Controls Row: Voice Message & Sound Effect Toggle */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* Row 1: Voice + Sound Toggle + Text Input + Send Button */}
+            <div className="flex items-center gap-1.5">
+              {/* Mic voice button */}
               <button
+                type="button"
                 onClick={() => {
                   handleSendMessage('【语音消息 🎙️ 0:02】');
                   setShowChatDrawer(false);
                 }}
-                className="py-2 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 font-medium text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                className="h-8 px-2.5 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 font-medium text-[11px] rounded-xl flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                title="发送语音"
               >
                 <Mic className="w-3.5 h-3.5" />
-                <span>发送语音 🎙️</span>
+                <span>语音</span>
               </button>
 
+              {/* Sound Toggle button */}
               <button
+                type="button"
                 onClick={() => setSoundEnabled(!soundEnabled)}
-                className={`py-2 px-3 border font-medium text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+                className={`h-8 px-2.5 border font-medium text-[11px] rounded-xl flex items-center gap-1 cursor-pointer transition-colors shrink-0 ${
                   soundEnabled
                     ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
                     : 'bg-slate-800 border-slate-700 text-slate-400'
                 }`}
+                title="音效开关"
               >
                 {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-                <span>音效: {soundEnabled ? '已开启' : '已静音'}</span>
+                <span>{soundEnabled ? '音效开' : '静音'}</span>
               </button>
-            </div>
 
-            {/* Custom Chat Input Box */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendMessage();
-                setShowChatDrawer(false);
-              }}
-              className="flex items-center gap-1.5"
-            >
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="输入自定义聊天内容..."
-                className="flex-1 bg-slate-950 border border-slate-700/90 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
-              />
-              <button
-                type="submit"
-                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+              {/* Input + Send */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage();
+                  setShowChatDrawer(false);
+                }}
+                className="flex-1 flex items-center gap-1"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>发送</span>
-              </button>
-            </form>
-
-            {/* Emoji Reactions Bar */}
-            <div className="space-y-1">
-              <span className="text-[11px] text-slate-400 font-medium">发送互动表情：</span>
-              <div className="grid grid-cols-8 gap-1 p-2 bg-slate-950/80 rounded-2xl border border-slate-800">
-                {EMOJI_OPTIONS.map((em) => (
-                  <button
-                    key={em}
-                    onClick={() => {
-                      handleSendEmoji(em);
-                      setShowChatDrawer(false);
-                    }}
-                    className="text-2xl hover:scale-125 transition-transform p-1 flex items-center justify-center cursor-pointer active:scale-95"
-                  >
-                    {em}
-                  </button>
-                ))}
-              </div>
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="输入聊天内容..."
+                  className="w-full h-8 bg-slate-950 border border-slate-700 rounded-xl px-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                />
+                <button
+                  type="submit"
+                  className="h-8 px-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                >
+                  <Send className="w-3 h-3" />
+                </button>
+              </form>
             </div>
 
-            {/* Quick Phrases List */}
-            <div className="space-y-1 flex-1 overflow-y-auto">
-              <span className="text-[11px] text-slate-400 font-medium">快捷战局短语：</span>
-              <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                {QUICK_PHRASES.map((phrase, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      handleSendMessage(phrase);
-                      setShowChatDrawer(false);
-                    }}
-                    className="w-full text-left p-2.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-800/80 hover:border-amber-500/40 rounded-xl text-xs text-slate-300 hover:text-amber-300 transition-colors cursor-pointer"
-                  >
-                    {phrase}
-                  </button>
-                ))}
-              </div>
+            {/* Row 2: 8 Emojis Bar */}
+            <div className="flex items-center justify-between gap-1 px-2 py-1 bg-slate-950/80 rounded-xl border border-slate-800/80">
+              {EMOJI_OPTIONS.map((em) => (
+                <button
+                  key={em}
+                  type="button"
+                  onClick={() => {
+                    handleSendEmoji(em);
+                    setShowChatDrawer(false);
+                  }}
+                  className="text-xl hover:scale-125 transition-transform p-0.5 flex items-center justify-center cursor-pointer active:scale-90"
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
+
+            {/* Row 3: Quick Phrases Grid (2 Columns, perfectly fits on screen) */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {QUICK_PHRASES.map((phrase, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    handleSendMessage(phrase);
+                    setShowChatDrawer(false);
+                  }}
+                  className="text-left px-2 py-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-800/80 hover:border-amber-500/40 rounded-xl text-[11px] text-slate-300 hover:text-amber-300 truncate transition-colors cursor-pointer active:scale-95"
+                  title={phrase}
+                >
+                  {phrase}
+                </button>
+              ))}
             </div>
           </div>
         </div>

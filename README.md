@@ -9,10 +9,12 @@
 ## 📖 目录
 1. [项目特性](#-项目特性)
 2. [Termux 极速运行与测试流程 (手把手教程)](#-termux-极速运行与测试流程-手把手教程)
-3. [局域网 WiFi / 热点多设备联机测试](#-局域网-wifi--热点多设备联机测试)
-4. [外网异地远程联机 (免费 Cloudflare 穿透)](#-外网异地远程联机-免费-cloudflare-穿透)
-5. [后台持久运行与防休眠设置](#-后台持久运行与防休眠设置)
-6. [常见问题与故障排查 (FAQ)](#-常见问题与故障排查-faq)
+3. [配置 .env 与 Telegram Bot 管理员运维](#-配置-env-与-telegram-bot-管理员运维)
+4. [局域网 WiFi / 热点多设备联机测试](#-局域网-wifi--热点多设备联机测试)
+5. [外网异地远程联机 (免费 Cloudflare 穿透)](#-外网异地远程联机-免费-cloudflare-穿透)
+6. [后台持久运行与防休眠设置](#-后台持久运行与防休眠设置)
+7. [常用维护命令速查](#-常用维护命令速查)
+8. [常见问题与故障排查 (FAQ)](#-常见问题与故障排查-faq)
 
 ---
 
@@ -39,67 +41,106 @@
 打开手机上的 **Termux** 终端，运行以下命令安装 Node.js LTS 与 Git：
 
 ```bash
-# 更新包列表并安装 Node.js 与 Git
 pkg update -y && pkg install -y git nodejs-lts
 ```
-
-> 💡 验证安装是否成功：输入 `node -v` 和 `npm -v`，若显示版本号即代表环境就绪。
 
 ---
 
 ### 步骤 2：进入已拉取的项目目录
 
 ```bash
-# 进入拉取的 sx 项目文件夹
-cd sx
-
-# (可选) 若代码有最新提交，可拉取最新更新：
-git pull origin main
+cd ~/sx
+git pull
 ```
 
 ---
 
 ### 步骤 3：安装项目所需依赖
 
-在项目根目录下执行：
-
 ```bash
 npm install
 ```
 
-> ⏳ 依赖安装约需 10~30 秒，完成后终端会提示 `added xxx packages`。
-
 ---
 
-### 步骤 4：启动本地测试开发服务
-
-运行启动命令：
+### 步骤 4：启动本地测试开发服务 (8080端口)
 
 ```bash
-npm run dev
+npm run dev:8080
 ```
 
-启动成功后，终端将输出如下信息：
-
-```text
-  VITE v8.x.x  ready in 320 ms
-
-  ➜  Local:   http://localhost:3000/
-  ➜  Network: http://192.168.x.x:3000/
-  ➜  press h + enter to show help
-```
+> 💡 如果想启动 3000 端口，可执行 `npm run dev`。
 
 ---
 
 ### 步骤 5：在手机浏览器中打开并开始测试对战
 
-1. **在本机手机上测试**：
-   - 打开手机自带的 **Chrome**、**Edge** 或任意手机浏览器。
-   - 在地址栏输入：
-     ```text
-     http://localhost:3000
-     ```
-   - 即可直接进入游戏大厅！点击 **「🔥 进入实时场 (一键入座)」** 即可体验发牌、智能理牌、变换牌型与三道比牌结算！
+打开手机自带的 **Chrome**、**Edge** 或任意手机浏览器，访问：
+```text
+http://localhost:8080
+```
+或您的 **Cloudflare 域名** 即可开始体验！
+
+---
+
+## 🤖 配置 .env 与 Telegram Bot 管理员运维
+
+在项目根目录创建 `.env` 文件后，即可通过 Telegram Bot 随时随地在手机 Telegram 上远程监控服务器状态、查询对局与广播公告！
+
+### 步骤 1：获取 Telegram Bot Token 与 管理员 ID
+
+1. **获取 Bot Token**：
+   - 在 Telegram 中搜索关注官方 **`@BotFather`**。
+   - 发送 `/newbot`，按照提示为机器人取名（例如 `MyShisanshuiBot`）。
+   - 创建成功后，BotFather 会发给您一串 **HTTP API Token**（例如 `7123456789:AAHKl...`）。
+
+2. **获取您的数字 User ID**：
+   - 在 Telegram 中搜索并向 **`@userinfobot`** 发送任意消息。
+   - 机器人会回复您的专属 **Id**（例如 `987654321`）。
+
+---
+
+### 步骤 2：在项目根目录创建并写入 `.env` 文件
+
+在 Termux 终端中依次执行以下命令：
+
+```bash
+cd ~/sx
+
+# 一键创建 .env 并写入配置（请将下面的 Token 与 ID 替换为您自己的）
+cat << 'EOF' > .env
+# Telegram Bot Token
+TG_BOT_TOKEN="你的Telegram_Bot_Token"
+
+# 管理员 Telegram 数字 User ID
+TG_ADMIN_ID="你的Telegram_User_ID"
+
+# 游戏服务端口
+PORT=8080
+EOF
+```
+
+> 💡 也可使用 nano 编辑器进行修改：`nano .env`（按 `Ctrl + O` 保存，`Ctrl + X` 退出）。
+
+---
+
+### 步骤 3：启动 Telegram 运维机器人
+
+在 Termux 中运行：
+
+```bash
+npm run bot
+```
+
+启动成功后，您的 Telegram 就会立刻收到机器人发来的 **「十三水游戏服务·上线通知」**！
+
+#### 📱 支持的 Telegram 管理员指令：
+- `/help` - 查看所有管理员指令菜单
+- `/status` - 查看服务器实时运行状态、内存占用、开机时长与局域网 IP
+- `/rooms` - 查看当前在线对战场与活跃玩家席位
+- `/broadcast <公告内容>` - 向全服在线玩家发送系统飘屏弹幕广播
+- `/ip` - 获取当前手机对战服务访问地址
+- `/restart` - 远程平滑重载游戏服务
 
 ---
 
@@ -108,53 +149,32 @@ npm run dev
 如果您想让同在一个 WiFi（或连接您手机热点）的朋友一起加入测试：
 
 1. **查看手机的局域网 IP**：
-   - 在 Termux 中新建一个会话窗口（从屏幕左边缘向右滑出侧边栏，点击 `New Session`）。
-   - 输入命令查看 IP：
-     ```bash
-     ifconfig | grep "inet "
-     ```
-     *(通常为 `192.168.1.xxx` 或 `192.168.43.xxx`)*
-
+   ```bash
+   ifconfig | grep "inet "
+   ```
 2. **好友加入游戏**：
-   - 让好友在连接同一 WiFi 的手机浏览器中输入：
-     ```text
-     http://你的手机局域网IP:3000
-     ```
-     *(例如 `http://192.168.1.108:3000`)*
-   - 即可实现零流量局域网面对面开黑对决！
+   好友在浏览器中输入：`http://你的手机局域网IP:8080` 即可面对面联机开黑！
 
 ---
 
 ## 🌐 外网异地远程联机 (免费 Cloudflare 穿透)
 
-如果您想把游戏链接发给微信/QQ 异地好友，无需公网 IP 和路由端口映射：
-
-1. 在 Termux 中安装 `cloudflared`：
-   ```bash
-   pkg install -y cloudflared
-   ```
-2. 保持游戏 `npm run dev` 运行，另开一个 Termux 窗口执行：
-   ```bash
-   cloudflared tunnel --url http://localhost:3000
-   ```
-3. 终端会生成一个专属的公网链接（例如 `https://xxxx-xxxx.trycloudflare.com`）。
-4. **把这个链接发给任何好友**，点击即可在手机微信/浏览器中异地秒开对战！
+```bash
+pkg install -y cloudflared
+cloudflared tunnel --url http://localhost:8080
+```
+把终端输出的 `https://xxxx.trycloudflare.com` 发给好友即可异地秒开！
 
 ---
 
 ## 🔋 后台持久运行与防休眠设置
 
-安卓系统默认会在锁屏后杀死后台进程，为了保持游戏服务 7x24 小时稳定运行：
-
 1. **开启 Termux 唤醒锁**：
-   在 Termux 终端中输入：
    ```bash
    termux-wake-lock
    ```
 2. **手机系统设置**：
-   - 进入手机系统 **「设置」->「应用管理」->「Termux」**。
-   - 将 **「电池优化 / 省电策略」** 设置为 **「无限制 / 允许后台高耗电」**。
-   - 开启 **「自启动」** 与 **「允许后台运行」** 权限。
+   - 进入系统「设置」->「应用管理」->「Termux」->「省电策略」设置为「无限制 / 允许后台高耗电」。
 
 ---
 
@@ -162,31 +182,10 @@ npm run dev
 
 | 操作 | 执行命令 |
 | :--- | :--- |
-| **启动开发测试服务** | `npm run dev` |
+| **启动 8080 端口游戏服务** | `npm run dev:8080` |
+| **启动 3000 端口游戏服务** | `npm run dev` |
+| **启动 Telegram 运维机器人** | `npm run bot` |
 | **生产环境编译打包** | `npm run build` |
 | **代码语法检查校验** | `npm run lint` |
-| **拉取 GitHub 最新代码** | `git pull origin main` |
-| **查看本机内网 IP** | `ifconfig` 或 `ip a` |
+| **拉取 GitHub 最新代码** | `git pull` |
 | **开启防睡眠锁** | `termux-wake-lock` |
-| **释放防睡眠锁** | `termux-wake-unlock` |
-
----
-
-## ❓ 常见问题与故障排查 (FAQ)
-
-### Q1: 运行 `npm install` 报错 `EACCES` 或权限不足？
-**解决办法**：确保当前工作目录位于 Termux 主目录 `$HOME` 下（不要在 `/sdcard` 挂载目录中安装依赖），运行：
-```bash
-cd $HOME/sx
-npm install
-```
-
-### Q2: 提示 `Port 3000 is already in use` (端口被占用)？
-**解决办法**：关闭之前残留的 Node 进程：
-```bash
-pkill -f node
-npm run dev
-```
-
-### Q3: 微信内置浏览器打开显示不全或字体异常？
-**解决办法**：项目已针对移动端 Web 标准全面适配，支持 iOS Safari、Android Chrome 及微信内置 WebView 全屏浏览。

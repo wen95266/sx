@@ -383,8 +383,36 @@ export const SoundEffects = {
 
       const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = 'zh-CN';
-      utterance.rate = rate;
-      utterance.pitch = pitch;
+
+      // Enforce distinct acoustic pitch & rate per persona
+      let finalPitch = pitch;
+      let finalRate = rate;
+
+      if (persona === 'child') {
+        finalPitch = 1.9; // 高音童声
+        finalRate = 1.25;
+      } else if (persona === 'cute') {
+        finalPitch = 1.8; // 高音娇滴
+        finalRate = 0.92;
+      } else if (persona === 'male') {
+        finalPitch = 0.45; // 浑厚男低音
+        finalRate = 1.05;
+      } else if (persona === 'elder') {
+        finalPitch = 0.38; // 沧桑老者低音
+        finalRate = 0.8;
+      } else if (persona === 'roar') {
+        finalPitch = 0.32; // 狂暴咆哮低音
+        finalRate = 1.35;
+      } else if (persona === 'female') {
+        finalPitch = 1.25; // 清爽女声
+        finalRate = 1.08;
+      } else if (persona === 'meme') {
+        finalPitch = 1.15;
+        finalRate = 1.15;
+      }
+
+      utterance.rate = finalRate;
+      utterance.pitch = finalPitch;
       utterance.volume = persona === 'roar' ? 1.0 : 0.95;
 
       const voices = window.speechSynthesis.getVoices();
@@ -394,18 +422,31 @@ export const SoundEffects = {
         matchedVoice = voices.find(
           (v) =>
             (v.lang.includes('zh') || v.lang.includes('cmn')) &&
-            (v.name.includes('Xiaoxiao') || v.name.includes('Female') || v.name.includes('Huihui') || v.name.includes('Yaoyao'))
+            (v.name.includes('Xiaoxiao') ||
+              v.name.includes('Female') ||
+              v.name.includes('Huihui') ||
+              v.name.includes('Yaoyao') ||
+              v.name.includes('Tingting') ||
+              v.name.includes('sfg'))
         );
       } else if (persona === 'male' || persona === 'roar' || persona === 'elder') {
         matchedVoice = voices.find(
           (v) =>
             (v.lang.includes('zh') || v.lang.includes('cmn')) &&
-            (v.name.includes('Yunxi') || v.name.includes('Male') || v.name.includes('Kangkang') || v.name.includes('Yunjian'))
+            (v.name.includes('Yunxi') ||
+              v.name.includes('Male') ||
+              v.name.includes('Kangkang') ||
+              v.name.includes('Yunjian') ||
+              v.name.includes('c2f') ||
+              v.name.includes('a1') ||
+              v.name.toLowerCase().includes('man'))
         );
       }
 
       if (!matchedVoice) {
-        matchedVoice = voices.find((v) => v.lang.includes('zh') || v.lang.includes('cmn') || v.name.includes('Chinese'));
+        matchedVoice = voices.find(
+          (v) => v.lang.includes('zh') || v.lang.includes('cmn') || v.name.includes('Chinese')
+        );
       }
 
       if (matchedVoice) utterance.voice = matchedVoice;

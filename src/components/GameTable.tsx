@@ -2323,37 +2323,35 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* 7. HIGH-SHEET HUMOROUS VOICE & CHAT INTERACTIVE DRAWER (78vh Height) */}
+      {/* 7. COMPACT QUICK PHRASES & VOICE DRAWER (Slim, Row-by-Row, No Scrolling Needed) */}
       {showChatDrawer && (
         <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex flex-col justify-end animate-in fade-in cursor-pointer"
+          className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex flex-col justify-end animate-in fade-in cursor-pointer"
           onClick={() => {
             if (isRecording) stopRecording();
             setShowChatDrawer(false);
           }}
         >
           <div
-            className="bg-[#0F172A] border-t-2 border-amber-500/80 rounded-t-3xl max-w-lg mx-auto w-full h-[78vh] p-3 sm:p-4 shadow-2xl flex flex-col justify-between gap-2.5 cursor-default animate-in slide-in-from-bottom-8 relative overflow-hidden"
+            className="bg-[#0F172A] border-t-2 border-amber-500/80 rounded-t-3xl max-w-lg mx-auto w-full p-3 shadow-2xl flex flex-col gap-2 cursor-default animate-in slide-in-from-bottom-6 relative overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Drawer Drag Bar Handle */}
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto shrink-0 mb-0.5" />
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto shrink-0" />
 
             {/* Header: Title + Sound Toggle + Close Button */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2 shrink-0">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 shrink-0">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl text-slate-950 font-black shadow-md text-base">
-                  🎭
-                </div>
+                <span className="text-lg">🎭</span>
                 <div>
-                  <h3 className="font-extrabold text-sm text-white flex items-center gap-1.5">
-                    <span>幽默语音与互动对讲</span>
-                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 font-mono">
-                      全声线音效包
+                  <h3 className="font-extrabold text-xs text-white flex items-center gap-1.5">
+                    <span>快捷语音短语</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
+                      点击即广播
                     </span>
                   </h3>
                   <p className="text-[10px] text-slate-400">
-                    男声 · 女声 · 老人 · 小孩 · 撒娇卖萌 · 怒吼咆哮 · 实时对讲
+                    自动匹配男声、女声、小孩、老人、撒娇、怒吼等音效
                   </p>
                 </div>
               </div>
@@ -2362,14 +2360,14 @@ export const GameTable: React.FC<GameTableProps> = ({
                 <button
                   type="button"
                   onClick={() => setSoundEnabled(!soundEnabled)}
-                  className={`px-2 py-1 border font-bold text-[11px] rounded-xl flex items-center gap-1 cursor-pointer transition-colors shadow-xs ${
+                  className={`px-2 py-0.5 border font-bold text-[10px] rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs ${
                     soundEnabled
                       ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
                       : 'bg-slate-800 border-slate-700 text-slate-400'
                   }`}
                   title="音效开关"
                 >
-                  {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                  {soundEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
                   <span>{soundEnabled ? '音效开' : '静音'}</span>
                 </button>
 
@@ -2378,20 +2376,20 @@ export const GameTable: React.FC<GameTableProps> = ({
                     if (isRecording) stopRecording();
                     setShowChatDrawer(false);
                   }}
-                  className="w-7 h-7 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full flex items-center justify-center cursor-pointer transition-colors shadow-xs"
+                  className="w-6 h-6 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full flex items-center justify-center cursor-pointer transition-colors"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
 
             {/* Utility Row: Mic Recording + Text Input Bar */}
-            <div className="flex items-center gap-1.5 shrink-0 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800">
+            <div className="flex items-center gap-1.5 shrink-0 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
               {isRecording ? (
                 <button
                   type="button"
                   onClick={stopRecording}
-                  className="h-8 px-3 bg-rose-600 animate-pulse text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shrink-0 shadow-lg"
+                  className="h-7 px-2.5 bg-rose-600 animate-pulse text-white font-bold text-[11px] rounded-lg flex items-center gap-1 cursor-pointer shrink-0"
                 >
                   <Square className="w-3 h-3 fill-current" />
                   <span>停止并发送 ({recordSeconds}s)</span>
@@ -2400,10 +2398,10 @@ export const GameTable: React.FC<GameTableProps> = ({
                 <button
                   type="button"
                   onClick={startRecording}
-                  className="h-8 px-2.5 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 font-bold text-[11px] rounded-xl flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0 shadow-xs"
+                  className="h-7 px-2 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 font-bold text-[10px] rounded-lg flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0"
                   title="点击按键开始真实麦克风对讲"
                 >
-                  <Mic className="w-3.5 h-3.5 text-emerald-400" />
+                  <Mic className="w-3 h-3 text-emerald-400" />
                   <span>按键语音</span>
                 </button>
               )}
@@ -2421,138 +2419,46 @@ export const GameTable: React.FC<GameTableProps> = ({
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   placeholder="自定义输入聊天消息..."
-                  className="w-full h-8 bg-slate-900 border border-slate-800 rounded-xl px-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400 font-medium"
+                  className="w-full h-7 bg-slate-900 border border-slate-800 rounded-lg px-2 text-[11px] text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400 font-medium"
                 />
                 <button
                   type="submit"
-                  className="h-8 px-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center cursor-pointer transition-colors shrink-0 shadow-xs"
+                  className="h-7 px-2 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold rounded-lg flex items-center justify-center cursor-pointer shrink-0"
                 >
-                  <Send className="w-3.5 h-3.5" />
+                  <Send className="w-3 h-3" />
                 </button>
               </form>
             </div>
 
-            {/* Scenario Category Tabs (Horizontal Scrollable) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none shrink-0 border-b border-slate-800/80">
-              {[
-                { id: 'all', name: '全部短语', icon: '🎭' },
-                { id: 'cui', name: '催牌急救', icon: '⚡' },
-                { id: 'tiaoxin', name: '挑衅炫耀', icon: '💥' },
-                { id: 'qiurao', name: '认输求饶', icon: '🥺' },
-                { id: 'wenhou', name: '问候礼貌', icon: '👶' },
-                { id: 'gaoxiao', name: '爆笑梗包', icon: '🤡' }
-              ].map((tab) => {
-                const isActive = selectedVoiceTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setSelectedVoiceTab(tab.id)}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-xs ${
-                      isActive
-                        ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-black shadow-md'
-                        : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800'
-                    }`}
-                  >
-                    <span className="text-sm">{tab.icon}</span>
-                    <span>{tab.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Search Input for Voice Phrases */}
-            <div className="shrink-0 relative">
-              <input
-                type="text"
-                value={voiceSearchQuery}
-                onChange={(e) => setVoiceSearchQuery(e.target.value)}
-                placeholder="🔎 搜索快捷短语关键词..."
-                className="w-full h-8 bg-slate-950/80 border border-slate-800 rounded-xl px-3 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400 font-medium"
-              />
-              {voiceSearchQuery && (
+            {/* COMPACT ROW-BY-ROW PHRASES GRID (2 Columns, Tight Chips, No Scroll Needed) */}
+            <div className="grid grid-cols-2 gap-1.5 my-1 max-h-[50vh] overflow-y-auto scrollbar-none">
+              {HUMOROUS_VOICE_PHRASES.map((vp) => (
                 <button
+                  key={vp.id}
                   type="button"
-                  onClick={() => setVoiceSearchQuery('')}
-                  className="absolute right-2 top-2 text-slate-400 hover:text-white cursor-pointer"
+                  onClick={() => {
+                    handleSendVoicePhrase(vp);
+                    setShowChatDrawer(false);
+                  }}
+                  className="p-1.5 bg-slate-900/90 hover:bg-amber-500/20 border border-slate-800 hover:border-amber-400/80 rounded-xl flex items-center justify-between gap-1 text-left cursor-pointer transition-all active:scale-95 shadow-xs group"
                 >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* MAIN VOICE PHRASES GRID (Scrollable Flex-1 Container) */}
-            <div className="flex-1 overflow-y-auto pr-1 space-y-2 scrollbar-none my-0.5">
-              {(() => {
-                const filtered = HUMOROUS_VOICE_PHRASES.filter((vp) => {
-                  const matchTab =
-                    selectedVoiceTab === 'all' ||
-                    vp.scenario === selectedVoiceTab ||
-                    vp.category === selectedVoiceTab;
-                  const matchQuery =
-                    !voiceSearchQuery.trim() ||
-                    vp.text.includes(voiceSearchQuery) ||
-                    vp.roleTitle.includes(voiceSearchQuery) ||
-                    vp.categoryName.includes(voiceSearchQuery);
-                  return matchTab && matchQuery;
-                });
-
-                if (filtered.length === 0) {
-                  return (
-                    <div className="h-32 flex flex-col items-center justify-center text-slate-500 text-xs">
-                      <p>未找到匹配的快捷短语～</p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {filtered.map((vp) => (
-                      <div
-                        key={vp.id}
-                        onClick={() => {
-                          handleSendVoicePhrase(vp);
-                          setShowChatDrawer(false);
-                        }}
-                        className="bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-400/80 rounded-2xl p-3 flex flex-col justify-between gap-2 transition-all shadow-md group cursor-pointer active:scale-98"
-                      >
-                        {/* Header: Persona Role Badge + Voice Tone Name */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-lg group-hover:scale-110 transition-transform">
-                              {vp.avatar}
-                            </span>
-                            <span className="font-extrabold text-xs text-amber-300">
-                              {vp.roleTitle}
-                            </span>
-                          </div>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30 font-mono">
-                            {vp.categoryName}声线
-                          </span>
-                        </div>
-
-                        {/* Text */}
-                        <p className="text-xs font-extrabold text-slate-100 leading-snug my-0.5 group-hover:text-amber-200 transition-colors">
-                          {vp.text}
-                        </p>
-
-                        {/* Direct Broadcast Action Indicator */}
-                        <div className="flex items-center justify-between pt-1.5 border-t border-slate-800/80 text-[10px] text-slate-400">
-                          <span>点击立即发声广播</span>
-                          <span className="flex items-center gap-1 bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 px-2.5 py-0.5 rounded-lg font-black text-[10px] shadow-xs group-hover:from-amber-300 group-hover:to-orange-400 transition-all">
-                            <Send className="w-3 h-3 fill-current" />
-                            广播发送
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex items-center gap-1 min-w-0 flex-1">
+                    <span className="text-sm shrink-0 group-hover:scale-110 transition-transform">
+                      {vp.avatar}
+                    </span>
+                    <span className="text-[11px] font-extrabold text-slate-100 truncate leading-tight group-hover:text-amber-300">
+                      {vp.text}
+                    </span>
                   </div>
-                );
-              })()}
+                  <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30 shrink-0">
+                    {vp.categoryName}
+                  </span>
+                </button>
+              ))}
             </div>
 
             {/* Quick Emojis Bar (Footer) */}
-            <div className="flex items-center justify-between gap-1 px-2 py-1 bg-slate-950/90 rounded-2xl border border-slate-800 shrink-0">
+            <div className="flex items-center justify-between gap-1 px-2 py-1 bg-slate-950/90 rounded-xl border border-slate-800 shrink-0">
               {['🔥', '👍', '😎', '🤣', '😭', '🤯', '👑', '💸'].map((em) => (
                 <button
                   key={em}
@@ -2561,7 +2467,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                     handleSendMessage(em);
                     setShowChatDrawer(false);
                   }}
-                  className="text-xl hover:scale-125 transition-transform p-0.5 flex items-center justify-center cursor-pointer active:scale-90"
+                  className="text-lg hover:scale-125 transition-transform p-0.5 flex items-center justify-center cursor-pointer active:scale-90"
                 >
                   {em}
                 </button>

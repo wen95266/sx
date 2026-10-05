@@ -172,7 +172,8 @@ export interface LobbyRoom {
   baseScore: number; // 底分水数
   minChips: number; // 准入筹码
   playersCount: number; // 当前玩家数
-  maxPlayers: number; // 4
+  maxPlayers: number; // 4 or 8
+  deckCount?: number; // 1 (52 cards) or 2 (104 cards)
   scheduledTime?: string; // 预约开赛时间 (仅预约场)
   bookedPlayers?: { name: string; avatar: string; ready: boolean }[];
   creatorName: string;

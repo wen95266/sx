@@ -286,15 +286,19 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Sound switch
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Deal 13 Cards to everyone & Auto Compute Best Hand
+  const is8Players = currentRoom?.maxPlayers === 8;
+  const activePlayerCount = is8Players ? 8 : 4;
+
+  // Deal 13 Cards to everyone & Auto Compute Best Hand (1 deck for 4p, 2 decks for 8p)
   const startNewRound = useCallback(() => {
     if (soundEnabled) SoundEffects.playDealCard();
 
-    const deck = shuffleDeck(createDeck());
+    const is8p = currentRoom?.maxPlayers === 8;
+    const deckCount = is8p ? 2 : 1;
+    const activeCount = is8p ? 8 : 4;
+    const deck = shuffleDeck(createDeck(deckCount));
+
     const handMe = sortCards(deck.slice(0, 13));
-    const handBot1 = sortCards(deck.slice(13, 26));
-    const handBot2 = sortCards(deck.slice(26, 39));
-    const handBot3 = sortCards(deck.slice(39, 52));
 
     const options = calculateSmartArrangements(handMe);
     setSmartOptions(options);
@@ -310,25 +314,23 @@ export const GameTable: React.FC<GameTableProps> = ({
       setTailCards(handMe.slice(8, 13));
     }
 
-    // Set bot arrangements
+    // Set player arrangements dynamically for 4 or 8 players
     const updatedPlayers = players.map((p, idx) => {
-      let hand = handMe;
-      if (idx === 1) hand = handBot1;
-      if (idx === 2) hand = handBot2;
-      if (idx === 3) hand = handBot3;
+      if (idx >= activeCount) return p;
 
-      const pOpts = calculateSmartArrangements(hand);
+      const pHand = idx === 0 ? handMe : sortCards(deck.slice(idx * 13, (idx + 1) * 13));
+      const pOpts = calculateSmartArrangements(pHand);
       const chosen = pOpts[0] || {
-        head: hand.slice(0, 3),
-        middle: hand.slice(3, 8),
-        tail: hand.slice(8, 13)
+        head: pHand.slice(0, 3),
+        middle: pHand.slice(3, 8),
+        tail: pHand.slice(8, 13)
       };
 
       return {
         ...p,
         name: idx === 0 ? currentUser.nickname || '我' : p.name,
         avatar: idx === 0 ? currentUser.avatar || '😎' : p.avatar,
-        cards: hand,
+        cards: pHand,
         isReady: idx !== 0,
         roundScore: 0,
         arrangement: {
@@ -345,7 +347,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     setCountdown(30);
     setPhase('ARRANGING');
     setRoundNumber((prev) => prev + 1);
-  }, [soundEnabled, players, currentUser]);
+  }, [soundEnabled, players, currentUser, currentRoom]);
 
   // Initial Mount: Detect Disconnection & Auto Recover Session
   useEffect(() => {
@@ -483,8 +485,8 @@ export const GameTable: React.FC<GameTableProps> = ({
 
         // Step 3: Tail Showdown (后墩)
         setTimeout(() => {
-          const activeFour = updatedPlayers.slice(0, 4);
-          const result = calculateGameSettlement(activeFour);
+          const activeParticipants = updatedPlayers.slice(0, activePlayerCount);
+          const result = calculateGameSettlement(activeParticipants);
 
           setSettlement(result);
           setPhase('ROUND_RESULT');
@@ -710,9 +712,13 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
 
           <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
-            <span>对战场</span>
+            <span>{currentRoom?.name || (is8Players ? '八人对战场' : '四人对战场')}</span>
             <span className="text-slate-500">·</span>
-            <span className="text-[11px] sm:text-xs text-slate-300">
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              {is8Players ? '2副牌·104张' : '1副牌·52张'}
+            </span>
+            <span className="text-slate-500 hidden sm:inline">·</span>
+            <span className="text-[11px] sm:text-xs text-slate-300 hidden sm:inline">
               第 <strong className="text-amber-400 font-mono">{roundNumber}</strong> 局
             </span>
           </div>
@@ -755,9 +761,9 @@ export const GameTable: React.FC<GameTableProps> = ({
         </div>
       )}
 
-      {/* 2. HORIZONTAL 8 PLAYER SEATS RIBBON */}
+      {/* 2. HORIZONTAL PLAYER SEATS RIBBON (4 or 8 seats) */}
       <div className="px-2 py-1 bg-[#090E1A] border-b border-slate-800/60 overflow-x-auto scrollbar-none flex items-center gap-1.5 z-20 shrink-0">
-        {players.map((seat) => {
+        {players.slice(0, activePlayerCount).map((seat) => {
           const isSelected = activeSeatId === seat.id;
           const isMe = seat.id === 'player_me';
 
@@ -930,14 +936,14 @@ export const GameTable: React.FC<GameTableProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-4 gap-2 text-center text-xs">
-              {players.slice(0, 4).map((p) => {
+            <div className={`grid ${is8Players ? 'grid-cols-4' : 'grid-cols-4'} gap-1.5 text-center text-xs`}>
+              {players.slice(0, activePlayerCount).map((p) => {
                 const s = settlement.scores[p.id] || 0;
                 return (
-                  <div key={p.id} className="p-2 bg-slate-950 border border-slate-800 rounded-xl">
-                    <div className="font-semibold text-slate-200 truncate">{p.name}</div>
+                  <div key={p.id} className="p-1.5 bg-slate-950 border border-slate-800 rounded-xl">
+                    <div className="font-semibold text-slate-200 text-[11px] truncate">{p.name}</div>
                     <div
-                      className={`font-mono font-bold text-xs mt-1 ${
+                      className={`font-mono font-bold text-xs mt-0.5 ${
                         s > 0 ? 'text-emerald-400' : s < 0 ? 'text-rose-400' : 'text-slate-400'
                       }`}
                     >

@@ -26,18 +26,20 @@ export const RANK_LABELS: Record<number, string> = {
   11: 'J', 12: 'Q', 13: 'K', 14: 'A'
 };
 
-export function createDeck(): Card[] {
+export function createDeck(deckCount = 1): Card[] {
   const deck: Card[] = [];
-  for (const suit of SUITS) {
-    for (let rank = 2; rank <= 14; rank++) {
-      deck.push({
-        id: `${suit}_${rank}`,
-        suit,
-        rank,
-        label: RANK_LABELS[rank],
-        suitSymbol: SUIT_SYMBOLS[suit],
-        color: suit === 'hearts' || suit === 'diamonds' ? 'red' : 'black'
-      });
+  for (let d = 1; d <= deckCount; d++) {
+    for (const suit of SUITS) {
+      for (let rank = 2; rank <= 14; rank++) {
+        deck.push({
+          id: d > 1 ? `${suit}_${rank}_d${d}` : `${suit}_${rank}`,
+          suit,
+          rank,
+          label: RANK_LABELS[rank],
+          suitSymbol: SUIT_SYMBOLS[suit],
+          color: suit === 'hearts' || suit === 'diamonds' ? 'red' : 'black'
+        });
+      }
     }
   }
   return deck;

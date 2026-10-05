@@ -16,10 +16,11 @@ import {
   Check,
   X,
   Crown,
-  Users
+  Users,
+  LogOut
 } from 'lucide-react';
 import { LobbyRoom } from '../types/game';
-import { UserProfile, addChips } from '../utils/authStorage';
+import { UserProfile, addChips, logoutUser } from '../utils/authStorage';
 import { SoundEffects } from '../utils/audio';
 
 interface GameLobbyProps {
@@ -92,7 +93,17 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
     setTimeout(() => setToastTip(null), 3000);
   };
 
+  const handleLogout = () => {
+    const loggedOut = logoutUser();
+    if (onUpdateUser) onUpdateUser(loggedOut);
+    onOpenAuth();
+  };
+
   const handleEnterRealtime = () => {
+    if (!currentUser.isLoggedIn) {
+      onOpenAuth();
+      return;
+    }
     if (currentUser.chips < REALTIME_ARENA_ROOM.minChips) {
       const updated = addChips(1000);
       if (onUpdateUser) onUpdateUser(updated);
@@ -107,6 +118,10 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
   };
 
   const handleEnterScheduled = () => {
+    if (!currentUser.isLoggedIn) {
+      onOpenAuth();
+      return;
+    }
     onEnterRoom(SCHEDULED_ARENA_ROOM);
   };
 
@@ -117,15 +132,15 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
 
   return (
     <div className="flex-1 flex flex-col bg-slate-950 text-slate-100 select-none overflow-y-auto">
-      {/* 顶部栏：左上角注册登录 | 右上角积分管理 */}
+      {/* 顶部栏：左上角退出登录 | 右上角积分管理 */}
       <header className="bg-slate-900/95 border-b border-slate-800 px-4 md:px-8 py-3.5 sticky top-0 z-40 backdrop-blur-md shadow-md">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-          {/* 左上角：注册 / 登录 (Register / Login) */}
+          {/* 左上角：已登录展示头像/昵称与 [退出登录] 按钮 */}
           <div className="flex items-center gap-3">
             <button
               onClick={onOpenAuth}
               className="relative text-2xl md:text-3xl w-12 h-12 bg-slate-950 border-2 border-amber-400/80 rounded-2xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform cursor-pointer group"
-              title="点击打开注册与账号登录"
+              title="点击查看玩家档案"
             >
               <span>{currentUser.avatar}</span>
               <span className="absolute -bottom-1 -right-1 text-[9px] px-1.5 py-0.2 bg-amber-400 text-slate-950 font-bold rounded-full shadow">
@@ -138,19 +153,32 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                 <span className="text-sm md:text-base font-bold text-white leading-none">
                   {currentUser.nickname}
                 </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono hidden sm:inline">
-                  ID: {currentUser.id.slice(0, 8)}
-                </span>
+                {currentUser.phone && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono hidden sm:inline">
+                    📱 {currentUser.phone.slice(0, 3)}****{currentUser.phone.slice(-4)}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-2 mt-1">
-                <button
-                  onClick={onOpenAuth}
-                  className="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-all shadow-xs active:scale-95"
-                >
-                  <Key className="w-3 h-3 text-slate-950" />
-                  <span>注册 / 登录</span>
-                </button>
+                {currentUser.isLoggedIn ? (
+                  <button
+                    onClick={handleLogout}
+                    className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 font-bold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-all shadow-xs active:scale-95"
+                    title="退出当前登录账号"
+                  >
+                    <LogOut className="w-3 h-3 text-rose-400" />
+                    <span>退出登录</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={onOpenAuth}
+                    className="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-all shadow-xs active:scale-95"
+                  >
+                    <Key className="w-3 h-3 text-slate-950" />
+                    <span>注册 / 登录</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

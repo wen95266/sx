@@ -15,7 +15,7 @@ export default function App() {
   const [gameViewMode, setGameViewMode] = useState<'lobby' | 'table'>('lobby');
   const [selectedRoom, setSelectedRoom] = useState<LobbyRoom | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile>(getStoredUser());
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(!getStoredUser().isLoggedIn);
   const [showBotGuideModal, setShowBotGuideModal] = useState(false);
 
   return (

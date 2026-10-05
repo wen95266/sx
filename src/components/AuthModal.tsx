@@ -1,30 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
+  Smartphone,
+  Lock,
   User,
   ShieldCheck,
-  Coins,
-  Trophy,
-  Flame,
-  Crown,
-  Sparkles,
-  RotateCcw,
+  CheckCircle2,
+  AlertCircle,
   LogOut,
-  UserPlus,
-  Check,
+  Sparkles,
+  Coins,
   X,
-  CreditCard,
-  Edit2,
-  Key
+  Bot
 } from 'lucide-react';
 import {
   UserProfile,
   AVATAR_OPTIONS,
-  getStoredUser,
-  registerOrUpdateUser,
-  createGuestUser,
-  getAllAccounts,
-  switchAccount
+  registerWithPhone,
+  loginWithPhone,
+  logoutUser,
+  getAuthorizedPhones
 } from '../utils/authStorage';
+import { SoundEffects } from '../utils/audio';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -39,230 +35,292 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   currentUser,
   onUserChange
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'edit' | 'switch'>('profile');
-  const [nicknameInput, setNicknameInput] = useState(currentUser.nickname);
-  const [usernameInput, setUsernameInput] = useState(currentUser.username);
-  const [selectedAvatar, setSelectedAvatar] = useState(currentUser.avatar);
-  const [savedTip, setSavedTip] = useState(false);
+  const [tab, setTab] = useState<'login' | 'register' | 'profile'>(
+    currentUser.isLoggedIn ? 'profile' : 'login'
+  );
 
-  useEffect(() => {
-    if (isOpen) {
-      setNicknameInput(currentUser.nickname);
-      setUsernameInput(currentUser.username);
-      setSelectedAvatar(currentUser.avatar);
-    }
-  }, [isOpen, currentUser]);
+  // Form states
+  const [phone, setPhone] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [password, setPassword] = useState('');
+  const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_OPTIONS[0]);
 
-  if (!isOpen) return null;
+  // Message alert
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const winRate =
-    currentUser.totalGames > 0
-      ? Math.round((currentUser.totalWins / currentUser.totalGames) * 100)
-      : 0;
+  if (!isOpen && currentUser.isLoggedIn) return null;
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  // If not logged in, force modal to stay open
+  const isForced = !currentUser.isLoggedIn;
+
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = registerOrUpdateUser(nicknameInput, selectedAvatar, usernameInput);
-    onUserChange(updated);
-    setSavedTip(true);
-    setTimeout(() => {
-      setSavedTip(false);
-      setActiveTab('profile');
-    }, 800);
-  };
+    setErrorMsg(null);
+    setSuccessMsg(null);
 
-  const handleCreateNewGuest = () => {
-    const newUser = createGuestUser();
-    onUserChange(newUser);
-    setNicknameInput(newUser.nickname);
-    setSelectedAvatar(newUser.avatar);
-    setUsernameInput(newUser.username);
-    setActiveTab('profile');
-  };
+    const res = loginWithPhone(phone, password);
+    if (!res.success) {
+      setErrorMsg(res.message);
+      SoundEffects.playWarning();
+      return;
+    }
 
-  const handleSelectAccount = (id: string) => {
-    const target = switchAccount(id);
-    if (target) {
-      onUserChange(target);
-      setNicknameInput(target.nickname);
-      setSelectedAvatar(target.avatar);
-      setUsernameInput(target.username);
-      setActiveTab('profile');
+    SoundEffects.playFanfare();
+    setSuccessMsg(res.message);
+    if (res.user) {
+      onUserChange(res.user);
+      setTimeout(() => {
+        setSuccessMsg(null);
+        onClose();
+      }, 700);
     }
   };
 
-  const allAccounts = getAllAccounts();
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const res = registerWithPhone(phone, nickname, password, selectedAvatar);
+    if (!res.success) {
+      setErrorMsg(res.message);
+      SoundEffects.playWarning();
+      return;
+    }
+
+    SoundEffects.playFanfare();
+    setSuccessMsg(res.message);
+    if (res.user) {
+      onUserChange(res.user);
+      setTimeout(() => {
+        setSuccessMsg(null);
+        onClose();
+      }, 900);
+    }
+  };
+
+  const handleLogout = () => {
+    const loggedOut = logoutUser();
+    onUserChange(loggedOut);
+    setTab('login');
+    setPhone('');
+    setPassword('');
+    setNickname('');
+    setErrorMsg(null);
+    setSuccessMsg('✓ 已成功退出登录');
+    setTimeout(() => setSuccessMsg(null), 2000);
+  };
+
+  const authList = getAuthorizedPhones();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85 backdrop-blur-md animate-in fade-in"
+      onClick={() => {
+        if (!isForced) onClose();
+      }}
+    >
+      <div
+        className="bg-[#0F172A] border-2 border-slate-700/80 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-900/90">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-[#0B1120]">
           <div className="flex items-center gap-2.5">
-            <span className="text-2xl p-1 bg-slate-800 rounded-xl border border-slate-700">
-              {currentUser.avatar}
-            </span>
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-slate-950 font-bold shadow-md shadow-amber-500/20">
+              🀄
+            </div>
             <div>
-              <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <span>玩家中心与账号管理</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
-                  {currentUser.chips.toLocaleString()} 水
-                </span>
-              </h2>
-              <p className="text-[11px] text-slate-400">ID: {currentUser.id}</p>
+              <div className="text-sm font-bold text-white leading-none">十三水竞技场</div>
+              <div className="text-[10px] text-amber-400 mt-1 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3" />
+                <span>Telegram Bot 授权验证系统</span>
+              </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          {!isForced && (
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
-        {/* Tab Navigator */}
-        <div className="flex border-b border-slate-800 bg-slate-950/60 p-1 gap-1 text-xs">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-1.5 rounded-lg font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'profile'
-                ? 'bg-slate-800 text-white font-bold shadow-xs'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <User className="w-3.5 h-3.5 text-sky-400" />
-            <span>玩家战绩</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('edit')}
-            className={`flex-1 py-1.5 rounded-lg font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'edit'
-                ? 'bg-slate-800 text-white font-bold shadow-xs'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Edit2 className="w-3.5 h-3.5 text-amber-400" />
-            <span>注册/改名</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('switch')}
-            className={`flex-1 py-1.5 rounded-lg font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === 'switch'
-                ? 'bg-slate-800 text-white font-bold shadow-xs'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Key className="w-3.5 h-3.5 text-emerald-400" />
-            <span>登录/切换</span>
-          </button>
-        </div>
+        {/* Tab Switcher (When not in profile view) */}
+        {tab !== 'profile' && (
+          <div className="grid grid-cols-2 p-1.5 bg-slate-950 border-b border-slate-800/80 text-xs font-bold">
+            <button
+              onClick={() => {
+                setTab('login');
+                setErrorMsg(null);
+              }}
+              className={`py-2 rounded-xl transition-all cursor-pointer ${
+                tab === 'login'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              手机号登录
+            </button>
+            <button
+              onClick={() => {
+                setTab('register');
+                setErrorMsg(null);
+              }}
+              className={`py-2 rounded-xl transition-all cursor-pointer ${
+                tab === 'register'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              新手机号注册
+            </button>
+          </div>
+        )}
 
-        {/* Content Body */}
-        <div className="p-5 overflow-y-auto max-h-[70vh] text-slate-300 text-xs">
-          {activeTab === 'profile' && (
-            <div className="space-y-4">
-              {/* Profile Card */}
-              <div className="bg-gradient-to-br from-slate-800/90 to-slate-900 border border-slate-700/80 rounded-xl p-4 flex items-center justify-between shadow-md">
-                <div className="flex items-center gap-3">
-                  <div className="text-4xl w-14 h-14 bg-slate-950/80 rounded-2xl flex items-center justify-center border border-amber-500/30 shadow-inner">
-                    {currentUser.avatar}
-                  </div>
-                  <div>
-                    <div className="font-bold text-white text-base flex items-center gap-1.5">
-                      <span>{currentUser.nickname}</span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-mono">
-                        LV.{Math.floor(currentUser.totalGames / 5) + 1}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5 font-mono">
-                      账号: @{currentUser.username}
-                    </div>
-                    <div className="text-[10px] text-slate-500 font-mono">
-                      Token: {currentUser.token.substring(0, 14)}...
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className="text-[10px] text-amber-400/90 font-medium">当前筹码水数</div>
-                  <div className="text-xl font-black text-amber-400 font-mono">
-                    {currentUser.chips.toLocaleString()}
-                  </div>
-                </div>
-              </div>
-
-              {/* Game Stats Grid */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center">
-                    <Trophy className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-400">总局数 / 胜率</div>
-                    <div className="font-bold text-white text-sm">
-                      {currentUser.totalGames} 局 <span className="text-emerald-400 text-xs font-mono">({winRate}%)</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center">
-                    <Flame className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-400">打枪次数</div>
-                    <div className="font-bold text-white text-sm font-mono">
-                      {currentUser.gunShots} 次
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                    <Crown className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-400">全垒打通杀</div>
-                    <div className="font-bold text-white text-sm font-mono">
-                      {currentUser.grandSlams} 次
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-400">天胡/特殊牌型</div>
-                    <div className="font-bold text-white text-sm font-mono">
-                      {currentUser.specialHands} 次
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 text-[11px] text-slate-400 flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>账号与战绩均保存在本地独立存储中，支持多人同机轮流对战或云端对局。</span>
-              </div>
+        {/* Form Body */}
+        <div className="p-5 flex flex-col gap-4 overflow-y-auto max-h-[75vh]">
+          {/* Messages */}
+          {errorMsg && (
+            <div className="p-3 bg-rose-500/20 border border-rose-500/50 rounded-xl text-xs text-rose-300 flex items-start gap-2 animate-in fade-in">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+              <span>{errorMsg}</span>
             </div>
           )}
 
-          {activeTab === 'edit' && (
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div>
-                <label className="block text-slate-300 font-medium mb-1.5">挑选个人卡通头像:</label>
-                <div className="grid grid-cols-7 gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+          {successMsg && (
+            <div className="p-3 bg-emerald-500/20 border border-emerald-500/50 rounded-xl text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* TAB 1: LOGIN */}
+          {tab === 'login' && (
+            <form onSubmit={handleLogin} className="flex flex-col gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                  <span>手机号：</span>
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="请输入注册手机号"
+                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>密码 (6位字符)：</span>
+                </label>
+                <input
+                  type="password"
+                  maxLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="请输入 6 位密码"
+                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 tracking-wider"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full mt-2 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-sm rounded-xl shadow-lg shadow-amber-500/20 cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <span>立即登录进入大厅</span>
+              </button>
+
+              <div className="text-center pt-2">
+                <span className="text-xs text-slate-400">还没有账号？ </span>
+                <button
+                  type="button"
+                  onClick={() => setTab('register')}
+                  className="text-xs font-bold text-amber-400 hover:underline cursor-pointer"
+                >
+                  点击注册
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* TAB 2: REGISTER */}
+          {tab === 'register' && (
+            <form onSubmit={handleRegister} className="flex flex-col gap-3">
+              {/* Bot Whitelist Banner */}
+              <div className="p-2.5 bg-indigo-950/40 border border-indigo-500/30 rounded-xl flex items-center gap-2 text-[11px] text-indigo-300">
+                <Bot className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span>仅限 Telegram Bot 管理员授权的手机号注册</span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>授权手机号：</span>
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="请输入管理员已授权的手机号"
+                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-400"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>玩家昵称：</span>
+                </label>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="例如：东方雀圣、雀神无双"
+                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-400"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>登录密码 (精确 6 位数)：</span>
+                </label>
+                <input
+                  type="password"
+                  maxLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="输入 6 位密码（不限大小写字母/数字）"
+                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-400 tracking-wider"
+                  required
+                />
+              </div>
+
+              {/* Avatar Selector */}
+              <div className="space-y-1">
+                <label className="text-xs text-slate-300 font-medium">选择对战头像：</label>
+                <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
                   {AVATAR_OPTIONS.map((av) => (
                     <button
                       key={av}
                       type="button"
                       onClick={() => setSelectedAvatar(av)}
-                      className={`text-2xl p-1.5 rounded-xl transition-all cursor-pointer ${
+                      className={`text-xl p-1.5 rounded-xl border transition-transform cursor-pointer shrink-0 ${
                         selectedAvatar === av
-                          ? 'bg-sky-500/30 border-2 border-sky-400 scale-110 shadow-md'
-                          : 'hover:bg-slate-800 border border-transparent'
+                          ? 'bg-emerald-500/20 border-emerald-400 scale-110'
+                          : 'bg-slate-950 border-slate-800 hover:border-slate-700 opacity-70'
                       }`}
                     >
                       {av}
@@ -271,105 +329,82 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">玩家显示昵称:</label>
-                <input
-                  type="text"
-                  value={nicknameInput}
-                  onChange={(e) => setNicknameInput(e.target.value)}
-                  placeholder="例如: 赌神高进、雀坛小霸王..."
-                  maxLength={16}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-sky-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">自定义用户名 (可选):</label>
-                <input
-                  type="text"
-                  value={usernameInput}
-                  onChange={(e) => setUsernameInput(e.target.value)}
-                  placeholder="例如: player_007"
-                  maxLength={20}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-sky-500 font-mono"
-                />
-              </div>
-
               <button
                 type="submit"
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-md"
+                className="w-full mt-2 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-500/20 cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5"
               >
-                {savedTip ? <Check className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                <span>{savedTip ? '保存成功！' : '保存个人信息'}</span>
+                <span>立即注册并登录</span>
               </button>
+
+              <div className="text-center pt-1">
+                <span className="text-xs text-slate-400">已有授权账号？ </span>
+                <button
+                  type="button"
+                  onClick={() => setTab('login')}
+                  className="text-xs font-bold text-emerald-400 hover:underline cursor-pointer"
+                >
+                  去登录
+                </button>
+              </div>
             </form>
           )}
 
-          {activeTab === 'switch' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-300 font-medium">本机已保存的账号列表:</span>
-                <button
-                  type="button"
-                  onClick={handleCreateNewGuest}
-                  className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer font-medium"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>一键生成新玩家</span>
-                </button>
+          {/* TAB 3: LOGGED-IN PROFILE & LOGOUT */}
+          {tab === 'profile' && currentUser.isLoggedIn && (
+            <div className="flex flex-col gap-4">
+              {/* Profile Card */}
+              <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl flex items-center gap-3">
+                <div className="text-4xl w-14 h-14 bg-slate-900 border-2 border-amber-400 rounded-2xl flex items-center justify-center shadow-lg">
+                  {currentUser.avatar}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-base truncate">{currentUser.nickname}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
+                      VIP
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    📱 手机号: {currentUser.phone ? `${currentUser.phone.slice(0, 3)}****${currentUser.phone.slice(-4)}` : '未绑定'}
+                  </div>
+                  <div className="text-xs text-amber-400 font-mono font-bold mt-1 flex items-center gap-1">
+                    <Coins className="w-3.5 h-3.5" />
+                    <span>{currentUser.chips.toLocaleString()} 水</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                {allAccounts.map((acc) => {
-                  const isCurrent = acc.id === currentUser.id;
-                  return (
-                    <div
-                      key={acc.id}
-                      onClick={() => handleSelectAccount(acc.id)}
-                      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
-                        isCurrent
-                          ? 'bg-sky-500/10 border-sky-500/40 text-white'
-                          : 'bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-2xl">{acc.avatar}</span>
-                        <div>
-                          <div className="font-bold flex items-center gap-1.5">
-                            <span>{acc.nickname}</span>
-                            {isCurrent && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-sky-500 text-slate-950 font-bold">
-                                当前使用中
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-mono">
-                            {acc.chips.toLocaleString()} 水 | {acc.totalGames} 场战绩
-                          </div>
-                        </div>
-                      </div>
-
-                      {!isCurrent && (
-                        <span className="text-[11px] text-sky-400 hover:underline">
-                          切换至此
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
+              {/* Stats Grid */}
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl">
+                  <div className="text-slate-400">总局数</div>
+                  <div className="font-mono font-bold text-white mt-0.5">{currentUser.totalGames}</div>
+                </div>
+                <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl">
+                  <div className="text-slate-400">胜场</div>
+                  <div className="font-mono font-bold text-emerald-400 mt-0.5">{currentUser.totalWins}</div>
+                </div>
+                <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl">
+                  <div className="text-slate-400">胜率</div>
+                  <div className="font-mono font-bold text-amber-400 mt-0.5">
+                    {currentUser.totalGames > 0
+                      ? `${Math.round((currentUser.totalWins / currentUser.totalGames) * 100)}%`
+                      : '0%'}
+                  </div>
+                </div>
               </div>
+
+              {/* Logout Button */}
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full py-2.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/50 text-rose-300 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>退出登录</span>
+              </button>
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-800 bg-slate-950/80 flex items-center justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium cursor-pointer transition-colors"
-          >
-            完成并返回
-          </button>
         </div>
       </div>
     </div>

@@ -157,7 +157,7 @@ export const GameTable: React.FC<GameTableProps> = ({
     setLatestChatMessage({ sender: myName, text: content });
 
     if (soundEnabled) {
-      SoundEffects.speakMandarinWithRole(vp.text, vp.pitch, vp.rate, vp.category);
+      SoundEffects.playVoicePhrase(vp);
     }
 
     sendRoomChatApi({
@@ -206,6 +206,7 @@ export const GameTable: React.FC<GameTableProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPlayedChatIdRef = useRef<string | null>(null);
 
   // Sound switch
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -302,6 +303,14 @@ export const GameTable: React.FC<GameTableProps> = ({
         if (syncedState.chatBubbles && syncedState.chatBubbles.length > 0) {
           const latest = syncedState.chatBubbles[syncedState.chatBubbles.length - 1];
           setLatestChatMessage({ sender: latest.senderName || '在线玩家', text: latest.text || '语音与表情消息' });
+          const sender = latest.senderId || latest.playerId;
+          if (sender !== userId && latest.id !== lastPlayedChatIdRef.current && soundEnabled) {
+            lastPlayedChatIdRef.current = latest.id;
+            const matched = HUMOROUS_VOICE_PHRASES.find((p) => latest.text?.includes(p.text));
+            if (matched) {
+              SoundEffects.playVoicePhrase(matched);
+            }
+          }
         }
       } catch (err) {
         console.warn('[Sync] Heartbeat error:', err);

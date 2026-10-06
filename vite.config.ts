@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -11,6 +12,27 @@ function roomServerPlugin() {
     name: 'room-server-plugin',
     configureServer(server: any) {
       server.middlewares.use((req: any, res: any, next: any) => {
+        // Direct audio static streaming for audio files to guarantee instant playback on all mobile devices
+        if (req.url && req.url.startsWith('/audio/')) {
+          const cleanUrl = req.url.split('?')[0];
+          const localFilePath = path.join(process.cwd(), 'public', cleanUrl);
+          if (fs.existsSync(localFilePath) && fs.statSync(localFilePath).isFile()) {
+            const ext = path.extname(localFilePath).toLowerCase();
+            const mimeTypes: Record<string, string> = {
+              '.mp3': 'audio/mpeg',
+              '.wav': 'audio/wav',
+              '.ogg': 'audio/ogg',
+              '.m4a': 'audio/mp4',
+              '.aac': 'audio/aac'
+            };
+            res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            res.setHeader('Accept-Ranges', 'bytes');
+            fs.createReadStream(localFilePath).pipe(res);
+            return;
+          }
+        }
+
         if (!req.url?.startsWith('/api/room')) return next();
 
         let bodyStr = '';

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">十三水多人竞技</string>
+    <string name="title_activity_main">十三水多人竞技</string>
+    <string name="package_name">com.shisanshui.game</string>
+    <string name="custom_url_scheme">com.shisanshui.game</string>
+</resources>

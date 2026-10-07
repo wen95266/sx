@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "十三水多人竞技对战",
+  "short_name": "十三水",
+  "description": "经典十三水多人竞技系统，支持四人/八人对战、智能理牌算法、水数互赠与战绩复盘。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0B1120",
+  "background_color": "#0B1120",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

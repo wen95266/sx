@@ -48,6 +48,7 @@ loadEnv();
 
 const BOT_TOKEN = process.env.TG_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_ID = String(process.env.TG_ADMIN_ID || process.env.TELEGRAM_ADMIN_ID || '').trim();
+const APP_PORT = String(process.env.PORT || '8080').trim();
 const AUTH_FILE_PATH = path.resolve(process.cwd(), 'authorized_phones.json');
 const PUBLIC_AUTH_FILE_PATH = path.resolve(process.cwd(), 'public', 'authorized_phones.json');
 
@@ -176,12 +177,23 @@ function getServerStats() {
   const memTotal = (os.totalmem() / 1024 / 1024).toFixed(1);
   const uptimeHours = (os.uptime() / 3600).toFixed(1);
 
+  // 检测具体操作系统与部署环境 (Termux / Serv00 / Linux)
+  let environmentName = `${os.type()} ${os.arch()}`;
+  if (process.platform === 'freebsd' || process.cwd().includes('/usr/home') || process.env.USER?.includes('serv00')) {
+    environmentName = `Serv00 (FreeBSD 虚拟主机 / 512MB配额)`;
+  } else if (process.env.TERMUX_VERSION || fs.existsSync('/data/data/com.termux')) {
+    environmentName = `Android Termux (移动设备 / ARM64)`;
+  } else if (process.platform === 'linux') {
+    environmentName = `Linux 云服务器 / VPS (${os.arch()})`;
+  }
+
   return {
     localIp,
+    port: APP_PORT,
     memFree,
     memTotal,
     uptimeHours,
-    platform: `${os.type()} ${os.arch()}`,
+    platform: environmentName,
     time: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
   };
 }
@@ -191,7 +203,8 @@ if (ADMIN_ID) {
   const stats = getServerStats();
   const initMsg = `🀄 <b>十三水游戏服务·控制台已连接</b>\n\n` +
     `📅 <b>时间</b>: ${stats.time}\n` +
-    `📶 <b>局域网IP</b>: <code>${stats.localIp}:8080</code>\n` +
+    `💻 <b>环境</b>: ${stats.platform}\n` +
+    `📶 <b>游戏地址</b>: <code>http://${stats.localIp}:${stats.port}</code>\n` +
     `💾 <b>运行内存</b>: 剩余 ${stats.memFree} MB / 共 ${stats.memTotal} MB\n` +
     `📱 <b>注册限制</b>: 只有 Bot 授权的手机号允许注册！\n\n` +
     `👇 <b>请直接点击下方中文键盘菜单进行快速操作：</b>`;
@@ -309,9 +322,8 @@ async function handleIncomingMessage(msg) {
     const s = getServerStats();
     const authCount = getAuthorizedPhones().length;
     const statusMsg = `📊 <b>十三水服务器当前运行状态</b>\n\n` +
-      `📱 <b>设备平台</b>: ${s.platform}\n` +
-      `🌐 <b>局域网对战地址</b>: <code>http://${s.localIp}:8080</code>\n` +
-      `☁️ <b>公网域名</b>: <i>Cloudflare Tunnel 映射中</i>\n` +
+      `💻 <b>部署平台</b>: ${s.platform}\n` +
+      `🌐 <b>服务访问地址</b>: <code>http://${s.localIp}:${s.port}</code>\n` +
       `💾 <b>运行内存</b>: 剩余 ${s.memFree} MB / 共 ${s.memTotal} MB\n` +
       `⏱️ <b>开机时长</b>: ${s.uptimeHours} 小时\n` +
       `📋 <b>授权手机数</b>: ${authCount} 个\n` +

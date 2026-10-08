@@ -1,0 +1,19 @@
+[Unit]
+Description=Shisanshui (Chinese Poker) Multiplayer Game Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/shisanshui
+Environment=NODE_ENV=production
+Environment=PORT=8080
+ExecStart=/usr/bin/node /var/www/shisanshui/server.js
+Restart=always
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=shisanshui
+
+[Install]
+WantedBy=multi-user.target

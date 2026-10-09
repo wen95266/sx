@@ -58,6 +58,8 @@ HOST=0.0.0.0
 # Telegram 运维机器人 (可选)
 TG_BOT_TOKEN="你的Telegram_Bot_Token"
 TG_ADMIN_ID="你的Telegram_User_ID"
+# Webhook 模式 (推荐配合 Nginx HTTPS 域名使用，免单独跑 bot 进程)
+# TG_WEBHOOK_URL="https://poker.yourdomain.com/api/telegram/webhook"
 EOF
 ```
 

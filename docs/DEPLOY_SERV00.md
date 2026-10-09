@@ -175,5 +175,8 @@ crontab -e
 2. `.env` 中的 `PORT` 是否与添加的端口一致？
 3. 检查当前监听状态：`sockstat -4 -l | grep 你的端口`
 
-### 3. Telegram Bot 无法连接？
-Serv00 服务器位于境外，通常可直连 Telegram API。如果无法接收消息，请确认 `.env` 中的 `TG_BOT_TOKEN` 正确无多余空格。
+### 3. Telegram Bot 无反应或无法连接？
+- **强烈推荐使用 Webhook 模式**：Serv00 系统会自动查杀长时间在后台驻留的轮询进程。在 `.env` 中添加 `TG_WEBHOOK_URL="https://你的Serv00域名/api/telegram/webhook"`，由 `server.js` 主服务直接接收 Telegram 推送，零后台进程，永不掉线！
+- **一键诊断命令**：在 Serv00 SSH 终端执行 `npm run bot:check`，可秒级检测连通性与 Telegram 官方报错。
+- **409 Conflict 冲突**：如果之前注册过 Webhook 导致轮询无法启动，执行 `npm run bot:polling` 或 `npm run bot:del-webhook` 即可一键自愈。
+- 详细排障请参阅：`docs/TELEGRAM_BOT_GUIDE.md`。

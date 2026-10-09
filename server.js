@@ -16,6 +16,16 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import dotenv from 'dotenv';
+import {
+  handleTelegramUpdate,
+  getBotConfig,
+  setTelegramWebhook,
+  getTelegramWebhookInfo,
+  deleteTelegramWebhook,
+  getTelegramMe,
+  runBotDiagnostics,
+  getAuthorizedPhones
+} from './scripts/tgBotCore.js';
 
 // 1. 自动定位并加载 .env 环境变量
 const possibleEnvPaths = [
@@ -297,22 +307,61 @@ app.get(['/health', '/api/health'], (req, res) => {
 
 // 8. 授权手机号白名单接口
 app.get('/api/authorized-phones', (req, res) => {
-  const candidates = [
-    path.resolve(process.cwd(), 'authorized_phones.json'),
-    path.resolve(PUBLIC_PATH, 'authorized_phones.json')
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(p, 'utf8'));
-        return res.json(data);
-      } catch (e) {}
-    }
-  }
-  res.json(['13800138000', '18888888888', '13988888888', '19999999999']);
+  res.json(getAuthorizedPhones());
 });
 
-// 9. 静态资源托管与 SPA 回退
+// 9. Telegram Webhook 核心接入路由与健康诊断
+// 接收 Telegram 官方主动 POST 推送的更新消息
+app.post('/api/telegram/webhook', async (req, res) => {
+  const botConfig = getBotConfig();
+  if (!botConfig.token) {
+    return res.status(503).json({ ok: false, error: 'Telegram Bot token not configured in .env' });
+  }
+
+  // 校验 Secret Token (如果配置了 TG_WEBHOOK_SECRET)
+  if (botConfig.webhookSecret) {
+    const incomingSecret = req.headers['x-telegram-bot-api-secret-token'];
+    if (incomingSecret !== botConfig.webhookSecret) {
+      console.warn('[TG Webhook] 收到未授权 Secret Token 请求，已拦截');
+      return res.status(403).json({ ok: false, error: 'Invalid secret token' });
+    }
+  }
+
+  // Telegram 官方规范：收到 Webhook 请求必须在数秒内立即返回 HTTP 200，随后异步处理
+  res.status(200).json({ ok: true });
+
+  try {
+    if (req.body) {
+      await handleTelegramUpdate(req.body);
+    }
+  } catch (err) {
+    console.error('[TG Webhook Error] 处理事件异常:', err.message);
+  }
+});
+
+// Telegram Webhook 状态与一键诊断接口 (GET 浏览器可直接查看)
+app.get(['/api/telegram/webhook', '/api/telegram/status'], async (req, res) => {
+  try {
+    const report = await runBotDiagnostics();
+    res.json({
+      status: 'ok',
+      time: new Date().toISOString(),
+      botConfigured: report.hasToken,
+      bot: report.botInfo,
+      webhook: report.webhookInfo,
+      diagnosis: report.diagnosisResults,
+      quickCommands: {
+        setWebhook: `node scripts/tgBot.js --set-webhook https://<你的域名>/api/telegram/webhook`,
+        deleteWebhook: `node scripts/tgBot.js --del-webhook`,
+        runCheck: `node scripts/tgBot.js --check`
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 10. 静态资源托管与 SPA 回退
 if (fs.existsSync(DIST_PATH)) {
   // 生产模式：直接托管 dist 编译产物
   app.use(express.static(DIST_PATH, {
@@ -367,7 +416,30 @@ if (typeof global.PhusionPassenger !== 'undefined' || process.env.PASSENGER_APP_
     console.log(`🌐 系统平台: ${os.platform()} (${os.arch()})`);
     console.log(`💾 初始内存占用: ${memMb} MB (超轻量设计，极致省电省内存)`);
     console.log(`⚡ API 接口: /api/room/sync, /api/room/chat, /health`);
+    console.log(`🤖 Telegram Webhook: /api/telegram/webhook`);
     console.log(`======================================================\n`);
+
+    // 检查并自动初始化 Telegram Bot
+    const botConfig = getBotConfig();
+    if (botConfig.token) {
+      if (botConfig.webhookUrl) {
+        console.log(`[TG Bot] 正在向 Telegram 注册 Webhook: ${botConfig.webhookUrl}...`);
+        setTelegramWebhook(botConfig.webhookUrl, botConfig.webhookSecret)
+          .then((res) => {
+            if (res.ok) {
+              console.log(`[TG Bot] ✓ Webhook 模式已就绪！Telegram 消息将直接投递至 /api/telegram/webhook`);
+            } else {
+              console.warn(`[TG Bot] ⚠️ Webhook 自动注册未成功:`, res.description);
+            }
+          })
+          .catch((e) => console.error('[TG Bot] Webhook 请求异常:', e.message));
+      } else {
+        console.log(`[TG Bot] 检测到 TG_BOT_TOKEN。`);
+        console.log(`  - 推荐 Webhook 模式: 在 .env 设置 TG_WEBHOOK_URL="https://你的公网域名/api/telegram/webhook"`);
+        console.log(`  - 轮询监听模式: 可在终端执行 "npm run bot" 启动常驻监听`);
+        console.log(`  - 一键诊断命令: 可在终端执行 "npm run bot:check" 进行排查\n`);
+      }
+    }
   });
 }
 

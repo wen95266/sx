@@ -113,30 +113,49 @@ export function saveAuthorizedPhones(phones: string[]): void {
 }
 
 /**
+ * 标准化手机号：剔除空格、横杠、括号及 +86 / 0086 前缀
+ */
+export function normalizePhoneNumber(raw: string): string {
+  if (!raw) return '';
+  const digits = String(raw).replace(/[\s\-()]/g, '');
+  return digits.replace(/^(\+?86|0086)/, '').trim();
+}
+
+/**
  * 实时从服务端拉取最新的 Telegram Bot 授权手机号白名单
+ * 双保险通道：优先请求 /api/authorized-phones，失败则回退至 /authorized_phones.json
  */
 export async function syncAuthorizedPhones(): Promise<string[]> {
-  try {
-    const res = await fetch(`/authorized_phones.json?_t=${Date.now()}`, {
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
+  const endpoints = [
+    `/api/authorized-phones?_t=${Date.now()}`,
+    `/authorized_phones.json?_t=${Date.now()}`
+  ];
 
-    if (res.ok) {
-      const list = await res.json();
-      if (Array.isArray(list)) {
-        const current = getAuthorizedPhones();
-        const merged = Array.from(new Set([...current, ...list]));
-        saveAuthorizedPhones(merged);
-        return merged;
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0) {
+          const current = getAuthorizedPhones();
+          const normalizedIncoming = list.map(normalizePhoneNumber).filter(Boolean);
+          const merged = Array.from(new Set([...current, ...normalizedIncoming]));
+          saveAuthorizedPhones(merged);
+          return merged;
+        }
       }
+    } catch (err) {
+      // 尝试下一个端点
     }
-  } catch (err) {
-    console.warn('[Auth] 同步服务端授权白名单稍有延迟，使用本地缓存:', err);
   }
+
   return getAuthorizedPhones();
 }
 
@@ -145,13 +164,14 @@ if (typeof window !== 'undefined') {
 }
 
 export function isPhoneAuthorized(phone: string): boolean {
-  const cleanPhone = phone.trim();
-  const list = getAuthorizedPhones();
+  const cleanPhone = normalizePhoneNumber(phone);
+  if (!cleanPhone) return false;
+  const list = getAuthorizedPhones().map(normalizePhoneNumber);
   return list.includes(cleanPhone);
 }
 
 export function addAuthorizedPhone(phone: string): boolean {
-  const cleanPhone = phone.trim();
+  const cleanPhone = normalizePhoneNumber(phone);
   if (!cleanPhone) return false;
   const list = getAuthorizedPhones();
   if (!list.includes(cleanPhone)) {
@@ -163,9 +183,9 @@ export function addAuthorizedPhone(phone: string): boolean {
 }
 
 export function removeAuthorizedPhone(phone: string): boolean {
-  const cleanPhone = phone.trim();
+  const cleanPhone = normalizePhoneNumber(phone);
   const list = getAuthorizedPhones();
-  const filtered = list.filter((p) => p !== cleanPhone);
+  const filtered = list.filter((p) => normalizePhoneNumber(p) !== cleanPhone);
   if (filtered.length !== list.length) {
     saveAuthorizedPhones(filtered);
     return true;
@@ -356,20 +376,21 @@ export async function registerWithPhone(
   password: string,
   avatar?: string
 ): Promise<{ success: boolean; message: string; user?: UserProfile }> {
-  const cleanPhone = phone.trim();
+  const cleanPhone = normalizePhoneNumber(phone);
   const cleanNickname = nickname.trim();
   const cleanPassword = password.trim();
 
   if (!cleanPhone) {
-    return { success: false, message: '请输入手机号！' };
+    return { success: false, message: '请输入正确的手机号！' };
   }
 
   const latestList = await syncAuthorizedPhones();
+  const normalizedList = latestList.map(normalizePhoneNumber);
 
-  if (!latestList.includes(cleanPhone) && !isPhoneAuthorized(cleanPhone)) {
+  if (!normalizedList.includes(cleanPhone) && !isPhoneAuthorized(cleanPhone)) {
     return {
       success: false,
-      message: '⚠️ 该手机号未获得管理员授权！请联系管理员在 Telegram Bot 中进行授权后再注册。'
+      message: `⚠️ 手机号 (${cleanPhone}) 尚未获得管理员授权！请在 Telegram Bot 中发送：/auth ${cleanPhone}，或点击下方“刷新白名单”重试。`
     };
   }
 
@@ -414,18 +435,18 @@ export function loginWithPhone(
   phone: string,
   password: string
 ): { success: boolean; message: string; user?: UserProfile } {
-  const cleanPhone = phone.trim();
+  const cleanPhone = normalizePhoneNumber(phone);
   const cleanPassword = password.trim();
 
   if (!cleanPhone) {
-    return { success: false, message: '请输入手机号！' };
+    return { success: false, message: '请输入正确的手机号！' };
   }
   if (!cleanPassword) {
     return { success: false, message: '请输入 6 位密码！' };
   }
 
   const accounts = getAllAccounts();
-  const account = accounts.find((a) => a.phone === cleanPhone);
+  const account = accounts.find((a) => normalizePhoneNumber(a.phone) === cleanPhone);
 
   if (!account) {
     return { success: false, message: '未找到该手机号账号，请先注册！' };

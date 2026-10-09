@@ -305,8 +305,11 @@ app.get(['/health', '/api/health'], (req, res) => {
   });
 });
 
-// 8. 授权手机号白名单接口
-app.get('/api/authorized-phones', (req, res) => {
+// 8. 授权手机号白名单接口 (同时支持 /api/authorized-phones 和根路径 /authorized_phones.json 强力穿透缓存)
+app.get(['/api/authorized-phones', '/authorized_phones.json'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.json(getAuthorizedPhones());
 });
 

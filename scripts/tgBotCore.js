@@ -75,9 +75,10 @@ export function getBotConfig() {
 // 3. 白名单数据存储
 const AUTH_FILE_PATH = path.resolve(process.cwd(), 'authorized_phones.json');
 const PUBLIC_AUTH_FILE_PATH = path.resolve(process.cwd(), 'public', 'authorized_phones.json');
+const DIST_AUTH_FILE_PATH = path.resolve(process.cwd(), 'dist', 'authorized_phones.json');
 
 export function getAuthorizedPhones() {
-  const possiblePaths = [PUBLIC_AUTH_FILE_PATH, AUTH_FILE_PATH];
+  const possiblePaths = [PUBLIC_AUTH_FILE_PATH, AUTH_FILE_PATH, DIST_AUTH_FILE_PATH];
   for (const p of possiblePaths) {
     try {
       if (fs.existsSync(p)) {
@@ -99,6 +100,12 @@ export function saveAuthorizedPhones(list) {
     }
     fs.writeFileSync(PUBLIC_AUTH_FILE_PATH, jsonStr, 'utf8');
     fs.writeFileSync(AUTH_FILE_PATH, jsonStr, 'utf8');
+    
+    // 如果存在 dist 目录（生产构建环境），同步更新 dist 中的静态文件，避免静态资源缓存旧版本
+    const distDir = path.resolve(process.cwd(), 'dist');
+    if (fs.existsSync(distDir)) {
+      fs.writeFileSync(DIST_AUTH_FILE_PATH, jsonStr, 'utf8');
+    }
     return true;
   } catch (e) {
     console.error('[TG Bot Core] 保存 authorized_phones.json 失败:', e.message);
@@ -264,28 +271,39 @@ export async function handleBotMessage(msg) {
     return tgSendMessage(chatId, welcome);
   }
 
-  // 2. 授权手机号快捷按钮与命令
+  // 2. 授权手机号快捷按钮、命令或直接发送手机号/名片
   if (text === '📱 授权手机号') {
     return tgSendMessage(
       chatId,
-      `📱 <b>授权手机号注册：</b>\n\n请直接回复手机号，或发送格式：\n<code>/auth 13800138000</code>\n\n例如：\n<code>/auth 13912345678</code>`
+      `📱 <b>授权手机号注册：</b>\n\n请直接回复要授权的手机号，或发送格式：\n<code>/auth 13800138000</code>\n\n例如：\n<code>13912345678</code> 或 <code>+8613912345678</code>`
     );
   }
 
-  if (text.startsWith('/auth ') || text.startsWith('授权 ') || /^(\+?86)?1\d{10}$/.test(text)) {
-    const phone = text.replace('/auth ', '').replace('授权 ', '').replace(/^\+?86/, '').trim();
-    if (!phone) {
-      return tgSendMessage(chatId, '❌ 请提供要授权的手机号，例如：<code>/auth 13800138000</code>');
+  // 支持 Telegram Contact 分享名片或文本手机号
+  const contactPhone = msg.contact?.phone_number ? String(msg.contact.phone_number).trim() : null;
+  const isAuthCmd = text.startsWith('/auth ') || text.startsWith('授权 ') || /^(\+?86)?\s*1[3-9]\d{9}$/.test(text.replace(/[\s-]/g, '')) || contactPhone;
+
+  if (isAuthCmd) {
+    let rawPhone = contactPhone || text.replace('/auth ', '').replace('授权 ', '');
+    // 清洗提取纯手机号：去除空格、横杠、+86前缀
+    const cleanedDigits = rawPhone.replace(/[\s\-()]/g, '');
+    const phone = cleanedDigits.replace(/^\+?86/, '').trim();
+
+    if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
+      return tgSendMessage(
+        chatId,
+        `❌ <b>手机号格式不正确</b>\n\n收到输入: <code>${escapeHtml(rawPhone || text)}</code>\n请输入标准的 11 位中国大陆手机号，例如：<code>13800138000</code> 或 <code>/auth 13800138000</code>`
+      );
     }
     const list = getAuthorizedPhones();
     if (list.includes(phone)) {
-      return tgSendMessage(chatId, `ℹ️ 手机号 <code>${phone}</code> 已经在授权白名单中，无需重复添加！`);
+      return tgSendMessage(chatId, `ℹ️ 手机号 <code>${phone}</code> 已经在授权白名单中，玩家可直接在网页注册！`);
     }
     list.push(phone);
     saveAuthorizedPhones(list);
     return tgSendMessage(
       chatId,
-      `✅ <b>手机号授权成功！</b>\n\n📱 手机号: <code>${phone}</code>\n🎉 该玩家现在可以在游戏登录界面输入该手机号及 6 位数密码正常登录注册！`
+      `✅ <b>手机号授权成功！</b>\n\n📱 手机号: <code>${phone}</code>\n🎉 白名单已实时持久化至服务器！玩家现在可以在游戏注册界面输入该手机号及 6 位数密码正常注册。`
     );
   }
 

@@ -10,7 +10,8 @@ import {
   Sparkles,
   Coins,
   X,
-  Bot
+  Bot,
+  RefreshCw
 } from 'lucide-react';
 import {
   UserProfile,
@@ -50,11 +51,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Auto-sync whitelist from server/Telegram Bot
   useEffect(() => {
     syncAuthorizedPhones().catch(() => {});
   }, [isOpen, tab]);
+
+  const handleManualSync = async () => {
+    setIsRefreshing(true);
+    setErrorMsg(null);
+    try {
+      const list = await syncAuthorizedPhones();
+      setSuccessMsg(`✓ 已成功从服务器同步最新授权白名单（共 ${list.length} 个授权号）`);
+      setTimeout(() => setSuccessMsg(null), 2500);
+    } catch {
+      setErrorMsg('同步服务器白名单失败，请检查网络连接');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (!isOpen && currentUser.isLoggedIn) return null;
 
@@ -273,9 +289,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {tab === 'register' && (
             <form onSubmit={handleRegister} className="flex flex-col gap-3">
               {/* Bot Whitelist Banner */}
-              <div className="p-2.5 bg-indigo-950/40 border border-indigo-500/30 rounded-xl flex items-center gap-2 text-[11px] text-indigo-300">
-                <Bot className="w-4 h-4 text-indigo-400 shrink-0" />
-                <span>仅限 Telegram Bot 管理员授权的手机号注册</span>
+              <div className="p-2.5 bg-indigo-950/40 border border-indigo-500/30 rounded-xl flex items-center justify-between gap-2 text-[11px] text-indigo-300">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Bot className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span className="truncate">需管理员在 Telegram Bot 授权方可注册</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleManualSync}
+                  disabled={isRefreshing}
+                  className="px-2 py-1 bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 hover:text-white rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-colors shrink-0 disabled:opacity-50"
+                  title="从服务器重新拉取最新授权手机号名单"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshing ? '同步中' : '刷新白名单'}</span>
+                </button>
               </div>
 
               <div className="space-y-1">

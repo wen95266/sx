@@ -234,9 +234,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="p-5 flex flex-col gap-4 overflow-y-auto max-h-[75vh]">
           {/* Messages */}
           {errorMsg && (
-            <div className="p-3 bg-rose-500/20 border border-rose-500/50 rounded-xl text-xs text-rose-300 flex items-start gap-2 animate-in fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
-              <span>{errorMsg}</span>
+            <div className="p-3 bg-rose-500/20 border border-rose-500/50 rounded-xl text-xs text-rose-300 flex flex-col gap-2 animate-in fade-in">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                <span className="whitespace-pre-line leading-relaxed">{errorMsg}</span>
+              </div>
+              {tab === 'register' && (errorMsg.includes('已经注册') || errorMsg.includes('重复注册')) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab('login');
+                    setErrorMsg(null);
+                  }}
+                  className="self-start px-2.5 py-1 bg-emerald-500/30 hover:bg-emerald-500/40 text-emerald-300 border border-emerald-500/50 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  👉 该手机号已注册，点击切换到【密码登录】
+                </button>
+              )}
+              {tab === 'login' && errorMsg.includes('尚未注册') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab('register');
+                    setErrorMsg(null);
+                  }}
+                  className="self-start px-2.5 py-1 bg-amber-500/30 hover:bg-amber-500/40 text-amber-300 border border-amber-500/50 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  👉 该手机号已获授权，点击前往【创建昵称与密码注册】
+                </button>
+              )}
             </div>
           )}
 
@@ -374,14 +400,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </button>
               </div>
 
-              {/* Zero initial chips notice */}
-              <div className="p-2 bg-slate-900/60 border border-slate-700/50 rounded-xl text-[11px] text-slate-300 space-y-0.5">
+              {/* Registration Rules notice */}
+              <div className="p-2.5 bg-slate-900/60 border border-slate-700/50 rounded-xl text-[11px] text-slate-300 space-y-1">
                 <div className="font-semibold text-amber-300 flex items-center gap-1">
                   <span>📌</span>
-                  <span>注册须知（必填昵称与密码）</span>
+                  <span>注册须知（无默认授权 / 严禁重复注册）</span>
                 </div>
                 <p className="text-[10px] text-slate-400 leading-relaxed">
-                  手机号授权后需自行创建昵称与6位密码。新注册用户<b>不赠送积分</b>（初始水数为 0），后续由管理员通过积分管理划拨。
+                  系统<b>无默认授权手机号</b>，须先由管理员在 Telegram Bot 发送 <code className="text-amber-400">/auth 手机号</code> 授权。
+                  <b>授权手机号仅可注册一次，不允许重复注册</b>。新注册用户初始水数为 0。
                 </p>
               </div>
 

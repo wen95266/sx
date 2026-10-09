@@ -25,6 +25,7 @@ import {
   getTelegramMe,
   runBotDiagnostics,
   getAuthorizedPhones,
+  saveAuthorizedPhones,
   getRegisteredUsers,
   saveRegisteredUsers
 } from './scripts/tgBotCore.js';
@@ -324,6 +325,26 @@ app.get(['/api/authorized-phones', '/authorized_phones.json'], (req, res) => {
   res.json(getAuthorizedPhones());
 });
 
+// 管理员移除手机号授权接口
+app.post(['/api/admin/revoke-phone', '/api/auth/revoke'], (req, res) => {
+  try {
+    const { phone } = req.body || {};
+    const cleanPhone = normalizePhone(phone);
+    if (!cleanPhone) {
+      return res.status(400).json({ success: false, message: '手机号不能为空' });
+    }
+    const list = getAuthorizedPhones().map(normalizePhone);
+    const filtered = list.filter((p) => p !== cleanPhone);
+    if (filtered.length === list.length) {
+      return res.status(404).json({ success: false, message: `未在授权白名单中找到手机号 ${cleanPhone}` });
+    }
+    saveAuthorizedPhones(filtered);
+    return res.json({ success: true, message: `已成功移除手机号 ${cleanPhone} 的授权`, count: filtered.length });
+  } catch (err) {
+    res.status(500).json({ success: false, message: '移除授权失败' });
+  }
+});
+
 // 8.1 玩家全服统一注册与跨设备登录接口 (解决在不同手机上登录提示未找到账号的问题)
 function normalizePhone(raw) {
   if (!raw) return '';
@@ -364,20 +385,12 @@ app.post('/api/auth/register', (req, res) => {
     const existingIndex = users.findIndex((u) => normalizePhone(u.phone) === cleanPhone);
 
     if (existingIndex >= 0) {
-      // 若该账号已登记，允许更新昵称与密码并登录，保留已有水数
+      // 授权手机号不允许重复注册！
       const existing = users[existingIndex];
-      existing.password = cleanPassword;
-      existing.nickname = cleanNickname;
-      if (avatar) existing.avatar = avatar;
-      existing.isLoggedIn = true;
-      existing.lastLoginAt = Date.now();
-      saveRegisteredUsers(users);
-
-      console.log(`[Auth API] ✓ 玩家更新资料/重置密码登录 [${cleanNickname}] (手机: ${cleanPhone})`);
-      return res.json({
-        success: true,
-        message: '🎉 账号资料更新成功，欢迎进入游戏大厅！',
-        user: existing
+      return res.status(400).json({
+        success: false,
+        alreadyRegistered: true,
+        message: `⚠️ 手机号 (${cleanPhone}) 已经注册过了，授权手机号不允许重复注册！\n玩家昵称：【${existing.nickname}】。请直接前往【登录】页面输入 6 位密码登录。`
       });
     }
 

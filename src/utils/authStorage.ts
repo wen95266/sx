@@ -47,13 +47,7 @@ export const AVATAR_OPTIONS = [
   '🧑‍💻', '🥷', '🧙', '👑', '🐉', '🦁', '🐯', '🐼', '🦊', '👧', '🤵', '🦸', '🐱', '🤖'
 ];
 
-export const DEFAULT_AUTHORIZED_PHONES = [
-  '13800138000',
-  '18888888888',
-  '13988888888',
-  '19999999999',
-  '13888888888'
-];
+export const DEFAULT_AUTHORIZED_PHONES: string[] = [];
 
 // --- 断线重连与对局状态持久化 (Disconnection Auto-Reconnect) ---
 
@@ -96,12 +90,15 @@ export function getAuthorizedPhones(): string[] {
     const raw = localStorage.getItem(STORAGE_KEY_AUTHORIZED_PHONES);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) {
+        // 过滤掉历史残留的 5 个默认测试手机号
+        return parsed.filter((p) => !['13800138000', '18888888888', '13988888888', '19999999999', '13888888888'].includes(p));
+      }
     }
   } catch (e) {
     console.error('Failed to load authorized phones', e);
   }
-  return DEFAULT_AUTHORIZED_PHONES;
+  return [];
 }
 
 export function saveAuthorizedPhones(phones: string[]): void {
@@ -143,12 +140,11 @@ export async function syncAuthorizedPhones(): Promise<string[]> {
 
       if (res.ok) {
         const list = await res.json();
-        if (Array.isArray(list) && list.length > 0) {
-          const current = getAuthorizedPhones();
+        if (Array.isArray(list)) {
           const normalizedIncoming = list.map(normalizePhoneNumber).filter(Boolean);
-          const merged = Array.from(new Set([...current, ...normalizedIncoming]));
-          saveAuthorizedPhones(merged);
-          return merged;
+          // 纯粹以服务端最新白名单为准，不再与本地废弃缓存合并，保证删除手机号能彻底生效
+          saveAuthorizedPhones(normalizedIncoming);
+          return normalizedIncoming;
         }
       }
     } catch (err) {
@@ -269,114 +265,28 @@ export interface ChipTransferRecord {
   timestamp: number;
 }
 
-export const DEFAULT_PRESEEDED_ACCOUNTS: UserProfile[] = [
-  {
-    id: 'u_8000_seed',
-    phone: '13800138000',
-    nickname: '雀神老李',
-    avatar: '🧙',
-    token: 'tok_seed_1',
-    chips: 12800,
-    isLoggedIn: false,
-    totalGames: 128,
-    totalWins: 86,
-    gunShots: 32,
-    grandSlams: 6,
-    specialHands: 12,
-    createdAt: Date.now() - 86400000 * 3,
-    lastLoginAt: Date.now() - 3600000
-  },
-  {
-    id: 'u_8888_seed',
-    phone: '18888888888',
-    nickname: '发财顺风',
-    avatar: '👑',
-    token: 'tok_seed_2',
-    chips: 28888,
-    isLoggedIn: false,
-    totalGames: 215,
-    totalWins: 142,
-    gunShots: 58,
-    grandSlams: 15,
-    specialHands: 24,
-    createdAt: Date.now() - 86400000 * 7,
-    lastLoginAt: Date.now() - 1800000
-  },
-  {
-    id: 'u_8889_seed',
-    phone: '13988888888',
-    nickname: '九筒大侠',
-    avatar: '🥷',
-    token: 'tok_seed_3',
-    chips: 8888,
-    isLoggedIn: false,
-    totalGames: 95,
-    totalWins: 60,
-    gunShots: 18,
-    grandSlams: 3,
-    specialHands: 8,
-    createdAt: Date.now() - 86400000 * 2,
-    lastLoginAt: Date.now() - 7200000
-  },
-  {
-    id: 'u_9999_seed',
-    phone: '19999999999',
-    nickname: '十三幺常胜',
-    avatar: '🐉',
-    token: 'tok_seed_4',
-    chips: 36800,
-    isLoggedIn: false,
-    totalGames: 340,
-    totalWins: 230,
-    gunShots: 92,
-    grandSlams: 28,
-    specialHands: 38,
-    createdAt: Date.now() - 86400000 * 10,
-    lastLoginAt: Date.now() - 900000
-  },
-  {
-    id: 'u_8880_seed',
-    phone: '13888888888',
-    nickname: '赌圣阿星',
-    avatar: '🤵',
-    token: 'tok_seed_5',
-    chips: 16800,
-    isLoggedIn: false,
-    totalGames: 160,
-    totalWins: 110,
-    gunShots: 40,
-    grandSlams: 9,
-    specialHands: 18,
-    createdAt: Date.now() - 86400000 * 5,
-    lastLoginAt: Date.now() - 5400000
-  }
-];
+export const DEFAULT_PRESEEDED_ACCOUNTS: UserProfile[] = [];
 
 export function getAllAccounts(): UserProfile[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_ALL_ACCOUNTS);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        let updated = false;
-        for (const seed of DEFAULT_PRESEEDED_ACCOUNTS) {
-          if (!parsed.some((a) => a.phone === seed.phone)) {
-            parsed.push(seed);
-            updated = true;
-          }
+      if (Array.isArray(parsed)) {
+        // 彻底清理历史残留的 5 个假 seed 账号与无效默认手机号
+        const cleaned = parsed.filter(
+          (a) => !a.id?.includes('_seed') && !['13800138000', '18888888888', '13988888888', '19999999999', '13888888888'].includes(a.phone)
+        );
+        if (cleaned.length !== parsed.length) {
+          localStorage.setItem(STORAGE_KEY_ALL_ACCOUNTS, JSON.stringify(cleaned));
         }
-        if (updated) {
-          localStorage.setItem(STORAGE_KEY_ALL_ACCOUNTS, JSON.stringify(parsed));
-        }
-        return parsed;
+        return cleaned;
       }
     }
-    localStorage.setItem(STORAGE_KEY_ALL_ACCOUNTS, JSON.stringify(DEFAULT_PRESEEDED_ACCOUNTS));
-    return DEFAULT_PRESEEDED_ACCOUNTS;
   } catch (e) {
     console.error('Failed to read accounts', e);
   }
-  return DEFAULT_PRESEEDED_ACCOUNTS;
+  return [];
 }
 
 /**
@@ -484,6 +394,16 @@ export async function registerWithPhone(
   }
   if (cleanPassword.length !== 6) {
     return { success: false, message: '密码必须为 6 位数字符（不限大小写字母/数字）！' };
+  }
+
+  // 0. 查重铁律：授权手机号不允许重复注册！
+  const localAccounts = getAllAccounts();
+  const existingLocal = localAccounts.find((a) => normalizePhoneNumber(a.phone) === cleanPhone);
+  if (existingLocal) {
+    return {
+      success: false,
+      message: `⚠️ 该手机号 (${cleanPhone}) 已经注册过了，授权手机号不允许重复注册！\n玩家昵称：【${existingLocal.nickname}】。请直接在【登录】页面输入 6 位密码登录。`
+    };
   }
 
   const chosenAvatar = avatar || AVATAR_OPTIONS[Math.floor(Math.random() * AVATAR_OPTIONS.length)];

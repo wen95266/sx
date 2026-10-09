@@ -94,6 +94,12 @@ function getCandidateFilePaths(fileName) {
   return Array.from(new Set(baseDirs.map((d) => path.resolve(d, fileName))));
 }
 
+export function normalizePhone(raw) {
+  if (!raw) return '';
+  const digits = String(raw).replace(/[\s\-()]/g, '');
+  return digits.replace(/^(\+?86|0086)/, '').trim();
+}
+
 export function getAuthorizedPhones() {
   const paths = getCandidateFilePaths('authorized_phones.json');
   for (const p of paths) {
@@ -101,11 +107,11 @@ export function getAuthorizedPhones() {
       if (fs.existsSync(p)) {
         const raw = fs.readFileSync(p, 'utf8');
         const list = JSON.parse(raw);
-        if (Array.isArray(list) && list.length > 0) return list;
+        if (Array.isArray(list)) return list;
       }
     } catch (e) {}
   }
-  return ['13800138000', '18888888888', '13988888888', '19999999999', '13888888888'];
+  return [];
 }
 
 export function saveAuthorizedPhones(list) {
@@ -136,93 +142,7 @@ export function saveAuthorizedPhones(list) {
 }
 
 // 3.1 玩家全服注册账号持久化存储 (解决跨手机/跨设备登录问题)
-const DEFAULT_PRESEEDED_USERS = [
-  {
-    id: "u_8000_seed",
-    phone: "13800138000",
-    password: "888888",
-    nickname: "雀神老李",
-    avatar: "🧙",
-    token: "tok_seed_1",
-    chips: 12800,
-    isLoggedIn: false,
-    totalGames: 128,
-    totalWins: 86,
-    gunShots: 32,
-    grandSlams: 6,
-    specialHands: 12,
-    createdAt: 1740000000000,
-    lastLoginAt: 1740000000000
-  },
-  {
-    id: "u_8888_seed",
-    phone: "18888888888",
-    password: "888888",
-    nickname: "发财顺风",
-    avatar: "👑",
-    token: "tok_seed_2",
-    chips: 28888,
-    isLoggedIn: false,
-    totalGames: 215,
-    totalWins: 142,
-    gunShots: 58,
-    grandSlams: 15,
-    specialHands: 24,
-    createdAt: 1740000000000,
-    lastLoginAt: 1740000000000
-  },
-  {
-    id: "u_8889_seed",
-    phone: "13988888888",
-    password: "888888",
-    nickname: "九筒大侠",
-    avatar: "🥷",
-    token: "tok_seed_3",
-    chips: 8888,
-    isLoggedIn: false,
-    totalGames: 95,
-    totalWins: 60,
-    gunShots: 18,
-    grandSlams: 3,
-    specialHands: 8,
-    createdAt: 1740000000000,
-    lastLoginAt: 1740000000000
-  },
-  {
-    id: "u_9999_seed",
-    phone: "19999999999",
-    password: "888888",
-    nickname: "十三幺常胜",
-    avatar: "🐉",
-    token: "tok_seed_4",
-    chips: 36800,
-    isLoggedIn: false,
-    totalGames: 340,
-    totalWins: 230,
-    gunShots: 92,
-    grandSlams: 28,
-    specialHands: 38,
-    createdAt: 1740000000000,
-    lastLoginAt: 1740000000000
-  },
-  {
-    id: "u_8880_seed",
-    phone: "13888888888",
-    password: "888888",
-    nickname: "赌圣阿星",
-    avatar: "🤵",
-    token: "tok_seed_5",
-    chips: 16800,
-    isLoggedIn: false,
-    totalGames: 160,
-    totalWins: 110,
-    gunShots: 40,
-    grandSlams: 9,
-    specialHands: 18,
-    createdAt: 1740000000000,
-    lastLoginAt: 1740000000000
-  }
-];
+const DEFAULT_PRESEEDED_USERS = [];
 
 export function getRegisteredUsers() {
   const paths = getCandidateFilePaths('users.json');
@@ -231,13 +151,14 @@ export function getRegisteredUsers() {
       if (fs.existsSync(p)) {
         const raw = fs.readFileSync(p, 'utf8');
         const list = JSON.parse(raw);
-        if (Array.isArray(list) && list.length > 0) return list;
+        if (Array.isArray(list)) {
+          // 彻底过滤掉历史测试 seed 假账号
+          return list.filter((u) => !u.id?.includes('_seed'));
+        }
       }
     } catch (e) {}
   }
-  // 未找到或为空时，初始化预置用户并写入持久化文件
-  saveRegisteredUsers(DEFAULT_PRESEEDED_USERS);
-  return [...DEFAULT_PRESEEDED_USERS];
+  return [];
 }
 
 export function saveRegisteredUsers(users) {
@@ -450,74 +371,121 @@ export async function handleBotMessage(msg, options = {}) {
   if (text === '📱 授权手机号') {
     return reply(
       chatId,
-      `📱 <b>授权手机号注册：</b>\n\n请直接回复要授权的手机号，或发送格式：\n<code>/auth 13800138000</code>\n\n例如：\n<code>13912345678</code> 或 <code>+8613912345678</code>`
+      `📱 <b>授权手机号注册：</b>\n\n请直接回复要授权的手机号，或发送格式：\n<code>/auth 13800000000</code>\n\n例如：\n<code>13912345678</code> 或 <code>+8613912345678</code>\n\n<i>系统无默认授权手机号，只有经过您授权的号码才允许注册。</i>`
     );
   }
 
   // 支持 Telegram Contact 分享名片或文本手机号
   const contactPhone = msg.contact?.phone_number ? String(msg.contact.phone_number).trim() : null;
-  const isAuthCmd = text.startsWith('/auth ') || text.startsWith('授权 ') || /^(\+?86)?\s*1[3-9]\d{9}$/.test(text.replace(/[\s-]/g, '')) || contactPhone;
+  const isAuthCmd = text.startsWith('/auth') || text.startsWith('授权 ') || /^(\+?86)?\s*1[3-9]\d{9}$/.test(text.replace(/[\s-]/g, '')) || contactPhone;
 
   if (isAuthCmd) {
-    let rawPhone = contactPhone || text.replace('/auth ', '').replace('授权 ', '');
+    let rawPhone = contactPhone || text.replace(/^\/auth\s*/, '').replace(/^授权\s*/, '');
     // 清洗提取纯手机号：去除空格、横杠、+86前缀
     const cleanedDigits = rawPhone.replace(/[\s\-()]/g, '');
-    const phone = cleanedDigits.replace(/^\+?86/, '').trim();
+    const phone = cleanedDigits.replace(/^(\+?86|0086)/, '').trim();
 
     if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
       return reply(
         chatId,
-        `❌ <b>手机号格式不正确</b>\n\n收到输入: <code>${escapeHtml(rawPhone || text)}</code>\n请输入标准的 11 位中国大陆手机号，例如：<code>13800138000</code> 或 <code>/auth 13800138000</code>`
+        `❌ <b>手机号格式不正确</b>\n\n收到输入: <code>${escapeHtml(rawPhone || text)}</code>\n请输入标准的 11 位中国大陆手机号，例如：<code>13912345678</code> 或 <code>/auth 13912345678</code>`
       );
     }
+
+    // 1. 检查该手机号是否已经注册过了 (授权手机号不允许重复注册)
+    const users = getRegisteredUsers();
+    const registeredUser = users.find((u) => normalizePhone(u.phone) === phone);
+    if (registeredUser) {
+      return reply(
+        chatId,
+        `⚠️ <b>该手机号已经完成注册，无需重复授权</b>\n\n` +
+        `📱 <b>手机号</b>: <code>${phone}</code>\n` +
+        `👤 <b>玩家昵称</b>: <b>${escapeHtml(registeredUser.nickname)}</b>\n` +
+        `💰 <b>当前水数</b>: ${registeredUser.chips} 水\n\n` +
+        `📌 <b>安全铁律</b>: 授权手机号不允许重复注册。该玩家可直接在登录页面凭密码登录。如需为该玩家充值，请发送：<code>/chips ${phone} 5000</code>。`
+      );
+    }
+
     const list = getAuthorizedPhones();
-    if (!list.includes(phone)) {
+    const isAlreadyAuthorized = list.includes(phone);
+    if (!isAlreadyAuthorized) {
       list.push(phone);
       saveAuthorizedPhones(list);
     }
 
     return reply(
       chatId,
-      `✅ <b>手机号授权成功！白名单已更新</b>\n\n` +
+      (isAlreadyAuthorized ? `ℹ️ <b>手机号已在授权白名单中（尚未注册）</b>\n\n` : `✅ <b>手机号授权成功！白名单已更新</b>\n\n`) +
       `📱 <b>授权手机号</b>: <code>${phone}</code>\n\n` +
       `📌 <b>注册与账号说明</b>:\n` +
-      `• 本授权仅开通白名单资格，<b>不预建密码、不预设昵称</b>。\n` +
-      `• 玩家需在游戏网页端【注册】页面自行创建昵称和6位密码方可登录。\n` +
-      `• <b>新注册用户不赠送积分</b>（初始水数为 0），后续可由管理员通过积分管理划拨水数。`
+      `• 本授权仅开通注册资格，<b>不预建密码、不预设昵称</b>。\n` +
+      `• 玩家需在游戏网页端【注册】页面自行创建专属昵称和 6 位密码。\n` +
+      `• <b>授权的手机号仅允许注册一次，不允许重复注册</b>！\n` +
+      `• 新注册用户不赠送积分（初始水数为 0），注册后由管理员划拨水数。`
     );
   }
 
   // 3. 授权白名单列表
   if (text === '📋 授权白名单' || text === '/auth_list' || text === '/list') {
     const list = getAuthorizedPhones();
-    let msgList = `📋 <b>当前已授权允许注册的手机号 (${list.length} 个)：</b>\n\n`;
+    if (list.length === 0) {
+      return reply(
+        chatId,
+        `📋 <b>当前白名单暂无授权手机号（白名单为空）</b>\n\n` +
+        `系统已关闭所有默认授权。如需允许新玩家注册，请发送：\n<code>/auth 手机号</code>`
+      );
+    }
+
+    const users = getRegisteredUsers();
+    const registeredPhoneSet = new Set(users.map((u) => normalizePhone(u.phone)));
+
+    let msgList = `📋 <b>当前已授权手机号名单 (共 ${list.length} 个)：</b>\n\n`;
     list.slice(0, 50).forEach((p, idx) => {
-      msgList += `${idx + 1}. <code>${p}</code>\n`;
+      const isReg = registeredPhoneSet.has(p);
+      msgList += `${idx + 1}. <code>${p}</code> ${isReg ? '✅(已注册)' : '⏳(待注册)'}\n`;
     });
     if (list.length > 50) {
       msgList += `\n<i>...仅显示前 50 个，共 ${list.length} 个</i>\n`;
     }
-    msgList += `\n💡 发送 <code>/revoke 手机号</code> 可以取消授权`;
+    msgList += `\n💡 发送 <code>/revoke 手机号</code> 可随时取消授权`;
     return reply(chatId, msgList);
   }
 
   // 4. 移除授权
   if (text === '🚫 移除授权') {
+    const list = getAuthorizedPhones();
     return reply(
       chatId,
-      `🚫 <b>移除手机号授权：</b>\n\n请发送要取消授权的手机号：\n<code>/revoke 13800138000</code>`
+      `🚫 <b>移除手机号授权：</b>\n\n` +
+      (list.length > 0
+        ? `当前白名单共有 <b>${list.length}</b> 个号码。请发送要取消授权的手机号：\n<code>/revoke 手机号</code>`
+        : `当前白名单为空，暂无授权手机号。`)
     );
   }
 
-  if (text.startsWith('/revoke ') || text.startsWith('取消授权 ')) {
-    const phone = text.replace('/revoke ', '').replace('取消授权 ', '').trim();
+  if (text.startsWith('/revoke') || text.startsWith('取消授权') || text.startsWith('/deauth') || text.startsWith('移除授权')) {
+    const rawPhone = text.replace(/^\/(revoke|deauth)\s*/, '').replace(/^(取消授权|移除授权)\s*/, '').trim();
+    const cleanedDigits = rawPhone.replace(/[\s\-()]/g, '');
+    const phone = cleanedDigits.replace(/^(\+?86|0086)/, '').trim();
+
+    if (!phone) {
+      return reply(chatId, `🚫 请指定要取消授权的手机号，例如：\n<code>/revoke 13912345678</code>`);
+    }
+
     const list = getAuthorizedPhones();
-    const filtered = list.filter((p) => p !== phone);
+    const filtered = list.filter((p) => normalizePhone(p) !== phone);
     if (filtered.length === list.length) {
-      return reply(chatId, `⚠️ 未在授权名单中找到手机号 <code>${phone}</code>`);
+      return reply(
+        chatId,
+        `⚠️ 未在授权白名单中找到手机号 <code>${phone}</code>\n当前白名单共有 ${list.length} 个号码。发送 <code>/list</code> 查看清单。`
+      );
     }
     saveAuthorizedPhones(filtered);
-    return reply(chatId, `🚫 已成功移除手机号 <code>${phone}</code> 的注册授权！`);
+    return reply(
+      chatId,
+      `🚫 <b>已成功移除手机号 <code>${phone}</code> 的注册授权！</b>\n\n` +
+      `当前授权白名单剩余 <b>${filtered.length}</b> 个号码。`
+    );
   }
 
   // 5. 查看服务器状态

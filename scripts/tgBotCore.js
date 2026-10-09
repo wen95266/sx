@@ -174,15 +174,21 @@ export async function tgApiRequest(method, params = {}, customToken = null, cust
   }
 }
 
-// 7. 发送消息辅助函数
-export async function tgSendMessage(chatId, text, extra = {}) {
-  const payload = {
+// 7. 发送消息辅助函数与 Webhook 直接应答构建器
+export function buildTgReplyPayload(chatId, text, extra = {}) {
+  return {
+    method: 'sendMessage',
     chat_id: chatId,
     text,
     parse_mode: 'HTML',
     reply_markup: ADMIN_KEYBOARD,
     ...extra
   };
+}
+
+export async function tgSendMessage(chatId, text, extra = {}) {
+  const payload = buildTgReplyPayload(chatId, text, extra);
+  delete payload.method;
 
   const res = await tgApiRequest('sendMessage', payload);
   if (!res.ok && res.description?.includes('can\'t parse entities')) {
@@ -193,8 +199,14 @@ export async function tgSendMessage(chatId, text, extra = {}) {
       reply_markup: ADMIN_KEYBOARD,
       ...extra
     };
-    delete fallbackPayload.parse_mode;
-    return await tgApiRequest('sendMessage', fallbackPayload);
+    const retryRes = await tgApiRequest('sendMessage', fallbackPayload);
+    if (!retryRes.ok) {
+      console.error(`[TG Bot] ❌ 发送消息至 Chat ${chatId} 失败:`, retryRes.description);
+    }
+    return retryRes;
+  }
+  if (!res.ok) {
+    console.error(`[TG Bot] ❌ 发送消息至 Chat ${chatId} 失败:`, res.description);
   }
   return res;
 }
@@ -240,18 +252,27 @@ export function getServerStats() {
 }
 
 // 9. 处理核心消息业务逻辑 (Webhook 与 Polling 共享)
-export async function handleBotMessage(msg) {
-  if (!msg || !msg.chat) return;
+export async function handleBotMessage(msg, options = {}) {
+  if (!msg || !msg.chat) return null;
 
   const chatId = msg.chat.id;
   const fromId = String(msg.from?.id || chatId);
   const text = (msg.text || '').trim();
   const { adminIds } = getBotConfig();
+  const isWebhook = options.asWebhookResponse ?? false;
+
+  // 响应辅助：Webhook 模式直接构造响应体，避免向外请求 api.telegram.org (彻底免代理)
+  const reply = async (targetChatId, replyText, extra = {}) => {
+    if (isWebhook) {
+      return buildTgReplyPayload(targetChatId, replyText, extra);
+    }
+    return await tgSendMessage(targetChatId, replyText, extra);
+  };
 
   // 权限校验
   if (adminIds.length > 0 && !adminIds.includes(fromId)) {
     console.warn(`[TG Bot] 拦截非管理员访问: UID ${fromId}`);
-    return tgSendMessage(
+    return reply(
       chatId,
       `⚠️ <b>未授权访问</b>\n\n您的 Telegram ID 是：<code>${fromId}</code>\n本服务已配置管理员白名单，请联系站长在 <code>.env</code> 的 <code>TG_ADMIN_ID</code> 中填入您的 ID。`
     );
@@ -268,12 +289,12 @@ export async function handleBotMessage(msg) {
       `• 只有管理员授权的手机号方可注册新账号\n` +
       `• 授权命令：<code>/auth 13800138000</code>\n\n` +
       `💡 <i>输入 /status 可随时查看服务器内存与在线状态</i>`;
-    return tgSendMessage(chatId, welcome);
+    return reply(chatId, welcome);
   }
 
   // 2. 授权手机号快捷按钮、命令或直接发送手机号/名片
   if (text === '📱 授权手机号') {
-    return tgSendMessage(
+    return reply(
       chatId,
       `📱 <b>授权手机号注册：</b>\n\n请直接回复要授权的手机号，或发送格式：\n<code>/auth 13800138000</code>\n\n例如：\n<code>13912345678</code> 或 <code>+8613912345678</code>`
     );
@@ -290,18 +311,18 @@ export async function handleBotMessage(msg) {
     const phone = cleanedDigits.replace(/^\+?86/, '').trim();
 
     if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
-      return tgSendMessage(
+      return reply(
         chatId,
         `❌ <b>手机号格式不正确</b>\n\n收到输入: <code>${escapeHtml(rawPhone || text)}</code>\n请输入标准的 11 位中国大陆手机号，例如：<code>13800138000</code> 或 <code>/auth 13800138000</code>`
       );
     }
     const list = getAuthorizedPhones();
     if (list.includes(phone)) {
-      return tgSendMessage(chatId, `ℹ️ 手机号 <code>${phone}</code> 已经在授权白名单中，玩家可直接在网页注册！`);
+      return reply(chatId, `ℹ️ 手机号 <code>${phone}</code> 已经在授权白名单中，玩家可直接在网页注册！`);
     }
     list.push(phone);
     saveAuthorizedPhones(list);
-    return tgSendMessage(
+    return reply(
       chatId,
       `✅ <b>手机号授权成功！</b>\n\n📱 手机号: <code>${phone}</code>\n🎉 白名单已实时持久化至服务器！玩家现在可以在游戏注册界面输入该手机号及 6 位数密码正常注册。`
     );
@@ -318,12 +339,12 @@ export async function handleBotMessage(msg) {
       msgList += `\n<i>...仅显示前 50 个，共 ${list.length} 个</i>\n`;
     }
     msgList += `\n💡 发送 <code>/revoke 手机号</code> 可以取消授权`;
-    return tgSendMessage(chatId, msgList);
+    return reply(chatId, msgList);
   }
 
   // 4. 移除授权
   if (text === '🚫 移除授权') {
-    return tgSendMessage(
+    return reply(
       chatId,
       `🚫 <b>移除手机号授权：</b>\n\n请发送要取消授权的手机号：\n<code>/revoke 13800138000</code>`
     );
@@ -334,10 +355,10 @@ export async function handleBotMessage(msg) {
     const list = getAuthorizedPhones();
     const filtered = list.filter((p) => p !== phone);
     if (filtered.length === list.length) {
-      return tgSendMessage(chatId, `⚠️ 未在授权名单中找到手机号 <code>${phone}</code>`);
+      return reply(chatId, `⚠️ 未在授权名单中找到手机号 <code>${phone}</code>`);
     }
     saveAuthorizedPhones(filtered);
-    return tgSendMessage(chatId, `🚫 已成功移除手机号 <code>${phone}</code> 的注册授权！`);
+    return reply(chatId, `🚫 已成功移除手机号 <code>${phone}</code> 的注册授权！`);
   }
 
   // 5. 查看服务器状态
@@ -351,7 +372,7 @@ export async function handleBotMessage(msg) {
       `⏱️ <b>开机时长</b>: ${s.uptimeHours} 小时\n` +
       `📋 <b>授权手机数</b>: ${authCount} 个\n` +
       `🟢 <b>服务状态</b>: 正常运行 (Active)`;
-    return tgSendMessage(chatId, statusMsg);
+    return reply(chatId, statusMsg);
   }
 
   // 6. 牌桌监控
@@ -362,12 +383,12 @@ export async function handleBotMessage(msg) {
       `├ 🤖 AI 陪练: 智多星, 雀神大师, 福建雀圣\n` +
       `└ ⚡ 玩法规则: 福建十三水 (打枪2倍 / 全垒打4倍 / 特殊天胡)\n\n` +
       `📅 <b>预约场 (静音赛)</b>: 黄金锦标赛 (正常等待中)`;
-    return tgSendMessage(chatId, roomsMsg);
+    return reply(chatId, roomsMsg);
   }
 
   // 7. 全服广播
   if (text === '📢 全服广播') {
-    return tgSendMessage(
+    return reply(
       chatId,
       `📢 <b>发送全服公告广播：</b>\n\n请直接发送格式：\n<code>/broadcast 今晚20点黄金赛准时打响，欢迎入场！</code>`
     );
@@ -376,14 +397,14 @@ export async function handleBotMessage(msg) {
   if (text.startsWith('/broadcast ')) {
     const content = text.replace('/broadcast ', '').trim();
     if (!content) {
-      return tgSendMessage(chatId, '❌ 请输入要广播的内容！');
+      return reply(chatId, '❌ 请输入要广播的内容！');
     }
-    return tgSendMessage(chatId, `📢 <b>全服广播已成功推送给所有在线玩家：</b>\n<i>"${escapeHtml(content)}"</i>`);
+    return reply(chatId, `📢 <b>全服广播已成功推送给所有在线玩家：</b>\n<i>"${escapeHtml(content)}"</i>`);
   }
 
   // 8. 玩家加水
   if (text === '💰 玩家加水') {
-    return tgSendMessage(
+    return reply(
       chatId,
       `💰 <b>给指定玩家加水/充值：</b>\n\n请发送格式：\n<code>/chips 13800138000 5000</code>\n或\n<code>/chips 玩家昵称 5000</code>`
     );
@@ -393,37 +414,37 @@ export async function handleBotMessage(msg) {
     const parts = text.replace('/chips ', '').trim().split(' ');
     const target = parts[0];
     const amount = parts[1] || '1000';
-    return tgSendMessage(chatId, `✅ 成功为玩家 <b>${escapeHtml(target)}</b> 补充 <b>+${escapeHtml(amount)} 水</b>！`);
+    return reply(chatId, `✅ 成功为玩家 <b>${escapeHtml(target)}</b> 补充 <b>+${escapeHtml(amount)} 水</b>！`);
   }
 
   // 9. 重启服务
   if (text === '🔄 重启服务' || text === '/restart') {
-    await tgSendMessage(chatId, '🔄 正在平滑重载服务与同步授权名单...');
-    return tgSendMessage(chatId, '✅ 服务重载完毕，所有游戏连接已恢复！');
+    return reply(chatId, '✅ 服务已同步并就绪，所有白名单已更新！');
   }
 
   // 默认回复
-  return tgSendMessage(
+  return reply(
     chatId,
     `❓ 未知指令: <code>${escapeHtml(text)}</code>\n\n💡 请直接点击下方的快捷菜单按钮，或发送 <code>/help</code> 查看说明。`
   );
 }
 
 // 10. 处理统一 Update 对象 (兼容 Webhook POST 体)
-export async function handleTelegramUpdate(update) {
-  if (!update) return;
+export async function handleTelegramUpdate(update, options = {}) {
+  if (!update) return null;
 
   if (update.message) {
-    return await handleBotMessage(update.message);
+    return await handleBotMessage(update.message, options);
   } else if (update.edited_message) {
-    return await handleBotMessage(update.edited_message);
+    return await handleBotMessage(update.edited_message, options);
   } else if (update.callback_query) {
     const cb = update.callback_query;
     if (cb.message) {
       cb.message.text = cb.data;
-      return await handleBotMessage(cb.message);
+      return await handleBotMessage(cb.message, options);
     }
   }
+  return null;
 }
 
 // 11. Webhook 运维接口

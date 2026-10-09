@@ -330,16 +330,23 @@ app.post('/api/telegram/webhook', async (req, res) => {
     }
   }
 
-  // Telegram 官方规范：收到 Webhook 请求必须在数秒内立即返回 HTTP 200，随后异步处理
-  res.status(200).json({ ok: true });
-
   try {
     if (req.body) {
-      await handleTelegramUpdate(req.body);
+      // 🚀 核心优化：利用 Telegram Webhook Direct Response 规范
+      // 直接在 Webhook HTTP 200 响应体中返回待发送指令 (包含 method: "sendMessage")
+      // 数据直接沿着 Cloudflare Tunnel 原路流回 Telegram 官方服务器！
+      // 手机完全无需主动向 api.telegram.org 发起外联 TCP 请求，彻底解决国内网络阻断与代理冲突！
+      const replyPayload = await handleTelegramUpdate(req.body, { asWebhookResponse: true });
+      if (replyPayload && replyPayload.method) {
+        return res.status(200).json(replyPayload);
+      }
     }
   } catch (err) {
     console.error('[TG Webhook Error] 处理事件异常:', err.message);
   }
+
+  // 默认正常确认 200
+  res.status(200).json({ ok: true });
 });
 
 // Telegram Webhook 状态与一键诊断接口 (GET 浏览器可直接查看)
@@ -432,10 +439,11 @@ if (typeof global.PhusionPassenger !== 'undefined' || process.env.PASSENGER_APP_
             if (res.ok) {
               console.log(`[TG Bot] ✓ Webhook 模式已就绪！Telegram 消息将直接投递至 /api/telegram/webhook`);
             } else {
-              console.warn(`[TG Bot] ⚠️ Webhook 自动注册未成功:`, res.description);
+              console.log(`[TG Bot] ℹ️ Webhook 自动注册提醒: ${res.description}`);
+              console.log(`   (注：若此前已设置过 Webhook，可完全忽略此项。当前服务已开启 Webhook 原路直回模式，免代理也能正常交互)`);
             }
           })
-          .catch((e) => console.error('[TG Bot] Webhook 请求异常:', e.message));
+          .catch((e) => console.log(`[TG Bot] Webhook 初始连通性提示: ${e.message}`));
       } else {
         console.log(`[TG Bot] 检测到 TG_BOT_TOKEN。`);
         console.log(`  - 推荐 Webhook 模式: 在 .env 设置 TG_WEBHOOK_URL="https://你的公网域名/api/telegram/webhook"`);

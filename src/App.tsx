@@ -11,10 +11,31 @@ import { BotConfigGuideModal } from './components/BotConfigGuideModal';
 import { LobbyRoom } from './types/game';
 import { getStoredUser, UserProfile, getMatchSession, clearMatchSession } from './utils/authStorage';
 
+export type GameTheme = 'deep-green' | 'lake-blue';
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile>(getStoredUser());
   const [showAuthModal, setShowAuthModal] = useState(!getStoredUser().isLoggedIn);
   const [showBotGuideModal, setShowBotGuideModal] = useState(false);
+
+  // Global luxury theme: 'deep-green' (墨玉深绿) | 'lake-blue' (琉璃湖蓝)
+  const [theme, setTheme] = useState<GameTheme>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('thirteen_poker_theme');
+      if (saved === 'deep-green' || saved === 'lake-blue') return saved;
+    }
+    return 'deep-green';
+  });
+
+  const handleToggleTheme = () => {
+    setTheme((prev) => {
+      const next: GameTheme = prev === 'deep-green' ? 'lake-blue' : 'deep-green';
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('thirteen_poker_theme', next);
+      }
+      return next;
+    });
+  };
 
   // Auto-detect existing match session for instant disconnection recovery
   const existingSession = getMatchSession();
@@ -56,10 +77,24 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none">
+    <div
+      className={`min-h-screen text-slate-100 flex flex-col font-sans select-none transition-colors duration-300 theme-${theme} ${
+        theme === 'deep-green'
+          ? 'bg-[#03150e]'
+          : 'bg-[#02161f]'
+      }`}
+      style={{
+        backgroundImage:
+          theme === 'deep-green'
+            ? 'radial-gradient(circle at 50% 15%, #0a3827 0%, #052319 45%, #02120b 100%)'
+            : 'radial-gradient(circle at 50% 15%, #094054 0%, #052938 45%, #02141c 100%)'
+      }}
+    >
       {gameViewMode === 'lobby' ? (
         <GameLobby
           currentUser={currentUser}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
           onEnterRoom={(room, seatIdx) => {
             setSelectedRoom(room);
             setSelectedSeatIndex(seatIdx ?? 0);
@@ -73,6 +108,8 @@ export default function App() {
         <GameTable
           currentRoom={selectedRoom || undefined}
           targetSeatIndex={selectedSeatIndex}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
           onBackToLobby={() => {
             clearMatchSession();
             setGameViewMode('lobby');

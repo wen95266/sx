@@ -72,6 +72,8 @@ import {
 interface GameTableProps {
   currentRoom?: LobbyRoom;
   targetSeatIndex?: number;
+  theme?: 'deep-green' | 'lake-blue';
+  onToggleTheme?: () => void;
   onBackToLobby: () => void;
   onUpdateUser?: (user: UserProfile) => void;
 }
@@ -97,9 +99,12 @@ const PRESET_VOICE_LINES = [
 export const GameTable: React.FC<GameTableProps> = ({
   currentRoom,
   targetSeatIndex = 0,
+  theme = 'deep-green',
+  onToggleTheme,
   onBackToLobby,
   onUpdateUser
 }) => {
+  const isGreen = theme === 'deep-green';
   const [currentUser, setCurrentUser] = useState<UserProfile>(getStoredUser());
   const [roundNumber, setRoundNumber] = useState(28);
   const [showPointsModal, setShowPointsModal] = useState(false);
@@ -1039,9 +1044,24 @@ export const GameTable: React.FC<GameTableProps> = ({
     phase === 'ROUND_RESULT';
 
   return (
-    <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#0B1120] text-slate-100 flex flex-col font-sans select-none relative overflow-hidden justify-between">
+    <div
+      className={`h-[100dvh] max-h-[100dvh] w-full text-slate-100 flex flex-col font-sans select-none relative overflow-hidden justify-between transition-colors duration-300 ${
+        isGreen ? 'bg-[#03150e]' : 'bg-[#02151e]'
+      }`}
+      style={{
+        backgroundImage: isGreen
+          ? 'radial-gradient(circle at 50% 25%, #0a3827 0%, #052419 45%, #02120b 100%)'
+          : 'radial-gradient(circle at 50% 25%, #094054 0%, #052938 45%, #02141c 100%)'
+      }}
+    >
       {/* 1. TOP HEADER BAR */}
-      <header className="px-3 py-1.5 bg-[#0F172A] border-b border-slate-800/80 flex items-center justify-between z-30 shadow-md shrink-0">
+      <header
+        className={`px-3 py-1.5 border-b flex items-center justify-between z-30 shadow-md shrink-0 backdrop-blur-md transition-colors ${
+          isGreen
+            ? 'bg-[#052317]/95 border-emerald-900/60 shadow-emerald-950/40'
+            : 'bg-[#052838]/95 border-teal-900/60 shadow-cyan-950/40'
+        }`}
+      >
         {/* Left: Back Arrow + Flame Icon + Title */}
         <div className="flex items-center gap-2">
           <button
@@ -1049,17 +1069,19 @@ export const GameTable: React.FC<GameTableProps> = ({
               clearMatchSession();
               onBackToLobby();
             }}
-            className="w-8 h-8 rounded-full bg-slate-800/90 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer shadow-xs active:scale-95"
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer shadow-xs active:scale-95 border ${
+              isGreen ? 'bg-[#082a1d] hover:bg-[#0c3928] border-emerald-800' : 'bg-[#072f41] hover:bg-[#0b3e55] border-teal-800'
+            }`}
             title="返回游戏大厅"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
 
-          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-slate-950 shadow-md shadow-amber-500/20">
+          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center text-slate-950 shadow-md shadow-amber-500/20 font-bold">
             <Flame className="w-3.5 h-3.5 fill-current" />
           </div>
 
-          <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+          <div className="text-xs sm:text-sm font-extrabold text-white flex items-center gap-1.5">
             <span>{currentRoom?.name || (is8Players ? '八人对战场' : '四人对战场')}</span>
             <span className="text-slate-500">·</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
@@ -1072,22 +1094,44 @@ export const GameTable: React.FC<GameTableProps> = ({
           </div>
         </div>
 
-        {/* Right: History + Player Count Badge + Gold Chips + Chat Button */}
+        {/* Right: Theme Toggle + History + Player Count Badge + Gold Chips + Chat Button */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* 🎨 Theme Toggle */}
+          <button
+            onClick={onToggleTheme}
+            className={`px-2 py-0.5 rounded-full border text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-xs ${
+              isGreen
+                ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-500/50 text-emerald-300'
+                : 'bg-cyan-950/80 hover:bg-cyan-900 border-cyan-500/50 text-cyan-300'
+            }`}
+            title="一键切换牌桌主题 (墨玉深绿 / 琉璃湖蓝)"
+          >
+            <span>{isGreen ? '🀄' : '🌊'}</span>
+            <span className="hidden sm:inline">{isGreen ? '深绿' : '湖蓝'}</span>
+          </button>
+
           {/* History / 战绩复盘 */}
           <button
             onClick={() => setShowHistoryModal(true)}
-            className="px-2 py-0.5 bg-slate-800/90 hover:bg-slate-700 border border-slate-700 hover:border-amber-400 text-slate-200 text-xs font-bold rounded-full flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95"
+            className={`px-2 py-0.5 border text-xs font-bold rounded-full flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95 ${
+              isGreen
+                ? 'bg-[#082a1d] hover:bg-[#0c3928] border-emerald-800 text-emerald-200'
+                : 'bg-[#072f41] hover:bg-[#0b3e55] border-teal-800 text-teal-200'
+            }`}
             title="查看近期对局战绩与亮牌复盘"
           >
             <History className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">战绩</span>
           </button>
 
-          {/* Player Count Badge (Shows Real Players count & Bots fill) */}
+          {/* Player Count Badge */}
           <div
             onClick={() => setShowPlayersModal(true)}
-            className="px-2 py-0.5 rounded-full bg-slate-800/90 border border-slate-700 hover:border-amber-400/60 text-slate-200 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95"
+            className={`px-2 py-0.5 rounded-full border text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95 ${
+              isGreen
+                ? 'bg-[#082a1d] hover:bg-[#0c3928] border-emerald-800 text-emerald-200'
+                : 'bg-[#072f41] hover:bg-[#0b3e55] border-teal-800 text-teal-200'
+            }`}
             title="点击查看真人玩家与人机补位详情"
           >
             <Users className="w-3.5 h-3.5 text-amber-400" />
@@ -1096,10 +1140,12 @@ export const GameTable: React.FC<GameTableProps> = ({
             </span>
           </div>
 
-          {/* Gold Chip Pill (Click to open Points Management & Transfer) */}
+          {/* Gold Chip Pill */}
           <button
             onClick={() => setShowPointsModal(true)}
-            className="px-2.5 py-1 bg-slate-950 hover:bg-slate-900 border border-amber-500/40 hover:border-amber-400 rounded-full flex items-center gap-1.5 text-xs text-amber-400 font-mono font-bold shadow-xs cursor-pointer transition-all active:scale-95 group"
+            className={`px-2.5 py-1 border border-amber-500/40 hover:border-amber-400 rounded-full flex items-center gap-1.5 text-xs text-amber-400 font-mono font-extrabold shadow-xs cursor-pointer transition-all active:scale-95 group ${
+              isGreen ? 'bg-[#041d13] hover:bg-[#072b1a]' : 'bg-[#032330] hover:bg-[#063345]'
+            }`}
             title="点击打开积分管理，搜索手机号互赠积分"
           >
             <Coins className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
@@ -1109,7 +1155,11 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* Purple Chat Button */}
           <button
             onClick={() => setShowChatDrawer(true)}
-            className="w-8 h-8 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center cursor-pointer transition-colors shadow-md active:scale-95"
+            className={`w-8 h-8 rounded-xl flex items-center justify-center cursor-pointer transition-colors shadow-md active:scale-95 text-white ${
+              isGreen
+                ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/50'
+                : 'bg-teal-600 hover:bg-teal-500 shadow-cyan-950/50'
+            }`}
             title="快捷短语、语音与表情"
           >
             <MessageCircle className="w-4 h-4" />
@@ -1119,7 +1169,7 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       {/* Reconnect & Alert Banner */}
       {reconnectTip && (
-        <div className="px-3 py-1 bg-gradient-to-r from-indigo-900/90 to-slate-900/90 border-b border-indigo-500/50 text-indigo-200 text-[11px] font-medium flex items-center justify-between gap-2 z-30 shrink-0">
+        <div className="px-3 py-1 bg-gradient-to-r from-emerald-950/90 to-slate-900/90 border-b border-emerald-500/50 text-emerald-200 text-[11px] font-medium flex items-center justify-between gap-2 z-30 shrink-0">
           <div className="flex items-center gap-1.5 truncate">
             <span className="truncate">{reconnectTip}</span>
           </div>
@@ -1130,7 +1180,11 @@ export const GameTable: React.FC<GameTableProps> = ({
       )}
 
       {/* 2. LIVE STATUS BANNER: 查看玩家 + 文字/短语横幅 */}
-      <div className="px-2.5 py-1 bg-[#090E1A] border-b border-slate-800/80 flex items-center justify-between gap-2 z-20 shrink-0">
+      <div
+        className={`px-2.5 py-1 border-b flex items-center justify-between gap-2 z-20 shrink-0 transition-colors ${
+          isGreen ? 'bg-[#041a12]/95 border-emerald-900/70' : 'bg-[#031e2b]/95 border-teal-900/70'
+        }`}
+      >
         <button
           onClick={() => setShowPlayersModal(true)}
           className="px-2.5 py-1 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0 shadow-xs"
@@ -1142,7 +1196,11 @@ export const GameTable: React.FC<GameTableProps> = ({
 
         <div
           onClick={() => setShowChatDrawer(true)}
-          className="flex-1 bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1 flex items-center gap-2 overflow-hidden cursor-pointer hover:border-slate-700 transition-colors"
+          className={`flex-1 border rounded-lg px-2.5 py-1 flex items-center gap-2 overflow-hidden cursor-pointer transition-colors ${
+            isGreen
+              ? 'bg-[#03150e]/90 border-emerald-900/80 hover:border-emerald-700'
+              : 'bg-[#021924]/90 border-teal-900/80 hover:border-teal-700'
+          }`}
           title="点击发送聊天或快捷短语"
         >
           <span className="text-[10px] font-bold text-amber-400 shrink-0">
@@ -1151,7 +1209,7 @@ export const GameTable: React.FC<GameTableProps> = ({
           <span className="text-xs text-slate-200 truncate flex-1 font-medium">
             {latestChatMessage?.text || '点击右侧短语/语音进行互动交流...'}
           </span>
-          <span className="text-[10px] text-slate-500 font-mono shrink-0">
+          <span className="text-[10px] text-amber-400/90 font-mono shrink-0">
             {phase === 'ARRANGING' ? `${countdown}s` : '比牌中'}
           </span>
         </div>
@@ -1252,15 +1310,27 @@ export const GameTable: React.FC<GameTableProps> = ({
         {/* VIEW 0: WAITING ROOM SEATS TABLE VIEW */}
         {/* ========================================================= */}
         {phase === 'WAITING' && (
-          <div className="flex-1 flex flex-col justify-around bg-[#0A0F1D] border-2 border-amber-500/40 rounded-3xl p-3 shadow-2xl relative overflow-hidden">
+          <div
+            className={`flex-1 flex flex-col justify-around rounded-3xl p-3 shadow-2xl relative overflow-hidden border-2 transition-colors ${
+              isGreen
+                ? 'bg-gradient-to-b from-[#083525] via-[#05251a] to-[#021710] border-amber-500/60 shadow-emerald-950/60'
+                : 'bg-gradient-to-b from-[#083e54] via-[#052a3a] to-[#021b25] border-amber-500/60 shadow-cyan-950/60'
+            }`}
+          >
             <div className="text-center">
               <h2 className="text-sm font-extrabold text-amber-300 flex items-center justify-center gap-1.5">
                 <span>🀄 {currentRoom?.name || '十三水多人竞技场'}</span>
-                <span className="text-[10px] px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono border border-emerald-500/30">
+                <span
+                  className={`text-[10px] px-2 py-0.2 rounded-full font-mono border font-bold ${
+                    isGreen
+                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50'
+                      : 'bg-teal-950/80 text-teal-300 border-teal-500/50'
+                  }`}
+                >
                   {realPlayersCount}/{maxRoomSeats} 人在线
                 </span>
               </h2>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className={`text-[11px] mt-0.5 ${isGreen ? 'text-emerald-300/80' : 'text-teal-300/80'}`}>
                 {realPlayersCount < 2 ? '等待更多真人玩家在首页选择座位入座 (至少需要2人开局)' : '人数已就绪！请房主/庄家点击下方洗牌切牌并发牌'}
               </p>
             </div>
@@ -1277,14 +1347,22 @@ export const GameTable: React.FC<GameTableProps> = ({
                     key={seatIdx}
                     className={`p-2.5 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all ${
                       seatedPlayer
-                        ? 'bg-gradient-to-b from-slate-900 to-amber-950/30 border-amber-500/50 shadow-md'
-                        : 'bg-slate-950/60 border-slate-800 border-dashed text-slate-600'
+                        ? isGreen
+                          ? 'bg-gradient-to-b from-[#0a3a29] to-[#052217] border-amber-400/70 shadow-lg'
+                          : 'bg-gradient-to-b from-[#094258] to-[#052938] border-amber-400/70 shadow-lg'
+                        : isGreen
+                        ? 'bg-[#031c12]/60 border-emerald-900/60 border-dashed text-emerald-700'
+                        : 'bg-[#032330]/60 border-teal-900/60 border-dashed text-teal-700'
                     }`}
                   >
                     {seatedPlayer ? (
                       <>
                         <div className="relative">
-                          <div className="text-2xl w-10 h-10 rounded-full bg-slate-950 border border-amber-400/60 flex items-center justify-center shadow-md">
+                          <div
+                            className={`text-2xl w-10 h-10 rounded-full border-2 flex items-center justify-center shadow-md ${
+                              isGreen ? 'bg-[#041a12] border-amber-400' : 'bg-[#03202c] border-amber-400'
+                            }`}
+                          >
                             {seatedPlayer.avatar}
                           </div>
                           {isHost && (
@@ -1299,7 +1377,7 @@ export const GameTable: React.FC<GameTableProps> = ({
                         </span>
                         <div className="flex items-center gap-1">
                           {isDealer && (
-                            <span className="text-[9px] px-1.5 py-0.2 bg-purple-500/20 text-purple-300 font-bold rounded border border-purple-500/40">
+                            <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 font-bold rounded border border-amber-500/40">
                               🀄 庄家
                             </span>
                           )}
@@ -1310,11 +1388,17 @@ export const GameTable: React.FC<GameTableProps> = ({
                       </>
                     ) : (
                       <>
-                        <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-lg text-slate-600">
+                        <div
+                          className={`w-10 h-10 rounded-full border flex items-center justify-center text-lg ${
+                            isGreen ? 'bg-[#041e14] border-emerald-900 text-emerald-700' : 'bg-[#042433] border-teal-900 text-teal-700'
+                          }`}
+                        >
                           🪑
                         </div>
-                        <span className="text-[11px] font-bold text-slate-500">{seatIdx + 1}号位</span>
-                        <span className="text-[9px] text-slate-600">等待入座</span>
+                        <span className={`text-[11px] font-bold ${isGreen ? 'text-emerald-400/80' : 'text-teal-400/80'}`}>
+                          {seatIdx + 1}号位
+                        </span>
+                        <span className={`text-[9px] ${isGreen ? 'text-emerald-600' : 'text-teal-600'}`}>等待入座</span>
                       </>
                     )}
                   </div>
@@ -1323,7 +1407,11 @@ export const GameTable: React.FC<GameTableProps> = ({
             </div>
 
             {/* Waiting prompt */}
-            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2 text-center text-xs text-slate-300">
+            <div
+              className={`border rounded-xl p-2 text-center text-xs ${
+                isGreen ? 'bg-[#031a11]/90 border-emerald-900/80' : 'bg-[#03202d]/90 border-teal-900/80'
+              }`}
+            >
               {realPlayersCount < 2 ? (
                 <div className="flex items-center justify-center gap-2 text-amber-400 font-medium">
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
@@ -1349,17 +1437,21 @@ export const GameTable: React.FC<GameTableProps> = ({
               onClick={() => {
                 if (selectedCardIds.length > 0) handleMoveSelectedToDun('head');
               }}
-              className={`bg-[#0F172A]/95 border rounded-xl p-1.5 sm:p-2 shadow-md flex flex-col justify-between flex-1 overflow-hidden transition-all ${
+              className={`border-2 rounded-2xl p-1.5 sm:p-2 shadow-xl flex flex-col justify-between flex-1 overflow-hidden transition-all relative ${
+                isGreen
+                  ? 'bg-gradient-to-br from-[#083524] via-[#052619] to-[#031c13] border-emerald-600/70 hover:border-amber-400'
+                  : 'bg-gradient-to-br from-[#083c50] via-[#052c3c] to-[#021f2b] border-teal-500/70 hover:border-cyan-300'
+              } ${
                 selectedCardIds.length > 0
-                  ? 'border-sky-500/70 hover:border-sky-400 cursor-pointer ring-1 ring-sky-500/30'
-                  : 'border-slate-800/90'
+                  ? 'ring-2 ring-amber-400/60 cursor-pointer -translate-y-0.5'
+                  : ''
               }`}
             >
               {/* Header */}
               <div className="flex items-center justify-between text-xs shrink-0 mb-0.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-sky-400 shadow-xs shadow-sky-400/50" />
-                  <span className="font-bold text-slate-100 text-xs">前墩</span>
+                  <span className="w-2 h-2 rounded-full bg-amber-400 shadow-xs shadow-amber-400/50" />
+                  <span className="font-extrabold text-white text-xs">前墩</span>
                   <span
                     className={`px-1.5 py-0.1 rounded text-[10px] font-mono font-bold border ${
                       headCards.length === 3
@@ -1370,12 +1462,12 @@ export const GameTable: React.FC<GameTableProps> = ({
                     {headCards.length}/3 {headCards.length === 3 ? '✓' : ''}
                   </span>
                   {selectedCardIds.length > 0 && (
-                    <span className="text-[10px] text-sky-400 font-semibold animate-pulse">
+                    <span className="text-[10px] text-amber-300 font-bold animate-pulse">
                       点击移入此墩
                     </span>
                   )}
                 </div>
-                <div className="text-sky-400 text-xs font-bold font-mono truncate max-w-[210px]">
+                <div className="text-amber-300 text-xs font-extrabold font-mono truncate max-w-[210px]">
                   {getDunLabel(headEval, headCards, 3, true)}
                 </div>
               </div>
@@ -1383,7 +1475,11 @@ export const GameTable: React.FC<GameTableProps> = ({
               {/* Cards Container */}
               <div className="flex items-center justify-start pl-1 flex-1 overflow-x-auto scrollbar-none">
                 {headCards.length === 0 ? (
-                  <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-slate-700/60 rounded-xl text-slate-500 text-xs">
+                  <div
+                    className={`w-full h-full flex items-center justify-center border-2 border-dashed rounded-xl text-xs ${
+                      isGreen ? 'border-emerald-800/60 text-emerald-400/60' : 'border-teal-800/60 text-teal-400/60'
+                    }`}
+                  >
                     + 点击将选中的牌移入前墩 (需3张)
                   </div>
                 ) : (
@@ -1422,17 +1518,21 @@ export const GameTable: React.FC<GameTableProps> = ({
               onClick={() => {
                 if (selectedCardIds.length > 0) handleMoveSelectedToDun('mid');
               }}
-              className={`bg-[#0F172A]/95 border rounded-xl p-1.5 sm:p-2 shadow-md flex flex-col justify-between flex-1 overflow-hidden transition-all ${
+              className={`border-2 rounded-2xl p-1.5 sm:p-2 shadow-xl flex flex-col justify-between flex-1 overflow-hidden transition-all relative ${
+                isGreen
+                  ? 'bg-gradient-to-br from-[#073021] via-[#052317] to-[#021a11] border-emerald-500/60 hover:border-amber-400'
+                  : 'bg-gradient-to-br from-[#073648] via-[#052735] to-[#021c27] border-teal-500/60 hover:border-cyan-300'
+              } ${
                 selectedCardIds.length > 0
-                  ? 'border-blue-500/70 hover:border-blue-400 cursor-pointer ring-1 ring-blue-500/30'
-                  : 'border-slate-800/90'
+                  ? 'ring-2 ring-amber-400/60 cursor-pointer -translate-y-0.5'
+                  : ''
               }`}
             >
               {/* Header */}
               <div className="flex items-center justify-between text-xs shrink-0 mb-0.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-blue-400 shadow-xs shadow-blue-400/50" />
-                  <span className="font-bold text-slate-100 text-xs">中墩</span>
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-xs shadow-cyan-400/50" />
+                  <span className="font-extrabold text-white text-xs">中墩</span>
                   <span
                     className={`px-1.5 py-0.1 rounded text-[10px] font-mono font-bold border ${
                       midCards.length === 5
@@ -1443,12 +1543,12 @@ export const GameTable: React.FC<GameTableProps> = ({
                     {midCards.length}/5 {midCards.length === 5 ? '✓' : ''}
                   </span>
                   {selectedCardIds.length > 0 && (
-                    <span className="text-[10px] text-blue-400 font-semibold animate-pulse">
+                    <span className="text-[10px] text-cyan-300 font-bold animate-pulse">
                       点击移入此墩
                     </span>
                   )}
                 </div>
-                <div className="text-blue-400 text-xs font-bold font-mono truncate max-w-[210px]">
+                <div className="text-cyan-300 text-xs font-extrabold font-mono truncate max-w-[210px]">
                   {getDunLabel(midEval, midCards, 5, false)}
                 </div>
               </div>
@@ -1456,7 +1556,11 @@ export const GameTable: React.FC<GameTableProps> = ({
               {/* Cards Container */}
               <div className="flex items-center justify-start pl-1 flex-1 overflow-x-auto scrollbar-none">
                 {midCards.length === 0 ? (
-                  <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-slate-700/60 rounded-xl text-slate-500 text-xs">
+                  <div
+                    className={`w-full h-full flex items-center justify-center border-2 border-dashed rounded-xl text-xs ${
+                      isGreen ? 'border-emerald-800/60 text-emerald-400/60' : 'border-teal-800/60 text-teal-400/60'
+                    }`}
+                  >
                     + 点击将选中的牌移入中墩 (需5张)
                   </div>
                 ) : (
@@ -1495,17 +1599,21 @@ export const GameTable: React.FC<GameTableProps> = ({
               onClick={() => {
                 if (selectedCardIds.length > 0) handleMoveSelectedToDun('tail');
               }}
-              className={`bg-[#0F172A]/95 border rounded-xl p-1.5 sm:p-2 shadow-md flex flex-col justify-between flex-1 overflow-hidden transition-all ${
+              className={`border-2 rounded-2xl p-1.5 sm:p-2 shadow-xl flex flex-col justify-between flex-1 overflow-hidden transition-all relative ${
+                isGreen
+                  ? 'bg-gradient-to-br from-[#0a3827] via-[#06281a] to-[#031e14] border-amber-500/60 hover:border-amber-300'
+                  : 'bg-gradient-to-br from-[#093f54] via-[#062d3d] to-[#03212d] border-amber-500/60 hover:border-cyan-300'
+              } ${
                 selectedCardIds.length > 0
-                  ? 'border-purple-500/70 hover:border-purple-400 cursor-pointer ring-1 ring-purple-500/30'
-                  : 'border-slate-800/90'
+                  ? 'ring-2 ring-amber-400/60 cursor-pointer -translate-y-0.5'
+                  : ''
               }`}
             >
               {/* Header */}
               <div className="flex items-center justify-between text-xs shrink-0 mb-0.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-purple-400 shadow-xs shadow-purple-400/50" />
-                  <span className="font-bold text-slate-100 text-xs">后墩</span>
+                  <span className="w-2 h-2 rounded-full bg-amber-400 shadow-xs shadow-amber-400/50" />
+                  <span className="font-extrabold text-white text-xs">后墩</span>
                   <span
                     className={`px-1.5 py-0.1 rounded text-[10px] font-mono font-bold border ${
                       tailCards.length === 5
@@ -1516,12 +1624,12 @@ export const GameTable: React.FC<GameTableProps> = ({
                     {tailCards.length}/5 {tailCards.length === 5 ? '✓' : ''}
                   </span>
                   {selectedCardIds.length > 0 && (
-                    <span className="text-[10px] text-purple-400 font-semibold animate-pulse">
+                    <span className="text-[10px] text-amber-300 font-bold animate-pulse">
                       点击移入此墩
                     </span>
                   )}
                 </div>
-                <div className="text-purple-400 text-xs font-bold font-mono truncate max-w-[210px]">
+                <div className="text-amber-300 text-xs font-extrabold font-mono truncate max-w-[210px]">
                   {getDunLabel(tailEval, tailCards, 5, false)}
                 </div>
               </div>
@@ -1569,14 +1677,26 @@ export const GameTable: React.FC<GameTableProps> = ({
         {/* VIEW B: REFINED SHOWDOWN ARENA (比牌对决与结算界面) */}
         {/* ========================================================= */}
         {isShowdownPhase && (
-          <div className="flex-1 flex flex-col justify-between gap-1 overflow-hidden bg-[#0A0F1D] border border-amber-500/40 rounded-2xl p-2 shadow-2xl relative">
+          <div
+            className={`flex-1 flex flex-col justify-between gap-1 overflow-hidden border-2 rounded-2xl p-2 shadow-2xl relative transition-colors ${
+              isGreen
+                ? 'bg-gradient-to-b from-[#083525] via-[#052419] to-[#02160f] border-amber-500/60 shadow-emerald-950/60'
+                : 'bg-gradient-to-b from-[#083e54] via-[#052a3a] to-[#021a24] border-amber-500/60 shadow-cyan-950/60'
+            }`}
+          >
             {/* Showdown Step Progress Bar */}
-            <div className="flex items-center justify-between gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 shrink-0">
+            <div
+              className={`flex items-center justify-between gap-1 p-1 rounded-xl border shrink-0 ${
+                isGreen ? 'bg-[#031d13]/90 border-emerald-900/80' : 'bg-[#032331]/90 border-teal-900/80'
+              }`}
+            >
               <div
                 className={`flex-1 py-1 rounded-lg text-center text-[11px] font-bold transition-all ${
                   phase === 'SHOWDOWN_HEAD'
-                    ? 'bg-sky-500 text-slate-950 ring-2 ring-sky-400 shadow-md'
-                    : 'bg-slate-900 text-slate-400'
+                    ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300 shadow-md font-black'
+                    : isGreen
+                    ? 'bg-[#052419] text-emerald-400/70'
+                    : 'bg-[#052a3a] text-teal-400/70'
                 }`}
               >
                 1. 前墩比牌
@@ -1585,8 +1705,10 @@ export const GameTable: React.FC<GameTableProps> = ({
               <div
                 className={`flex-1 py-1 rounded-lg text-center text-[11px] font-bold transition-all ${
                   phase === 'SHOWDOWN_MID'
-                    ? 'bg-blue-500 text-white ring-2 ring-blue-400 shadow-md'
-                    : 'bg-slate-900 text-slate-400'
+                    ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300 shadow-md font-black'
+                    : isGreen
+                    ? 'bg-[#052419] text-emerald-400/70'
+                    : 'bg-[#052a3a] text-teal-400/70'
                 }`}
               >
                 2. 中墩比牌
@@ -1595,8 +1717,10 @@ export const GameTable: React.FC<GameTableProps> = ({
               <div
                 className={`flex-1 py-1 rounded-lg text-center text-[11px] font-bold transition-all ${
                   phase === 'SHOWDOWN_TAIL'
-                    ? 'bg-purple-500 text-white ring-2 ring-purple-400 shadow-md'
-                    : 'bg-slate-900 text-slate-400'
+                    ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300 shadow-md font-black'
+                    : isGreen
+                    ? 'bg-[#052419] text-emerald-400/70'
+                    : 'bg-[#052a3a] text-teal-400/70'
                 }`}
               >
                 3. 后墩比牌
@@ -1605,8 +1729,10 @@ export const GameTable: React.FC<GameTableProps> = ({
               <div
                 className={`flex-1 py-1 rounded-lg text-center text-[11px] font-bold transition-all ${
                   phase === 'ROUND_RESULT'
-                    ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300 font-extrabold shadow-md'
-                    : 'bg-slate-900 text-slate-400'
+                    ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 ring-2 ring-amber-300 font-black shadow-md'
+                    : isGreen
+                    ? 'bg-[#052419] text-emerald-400/70'
+                    : 'bg-[#052a3a] text-teal-400/70'
                 }`}
               >
                 4. 总结算
@@ -1615,7 +1741,11 @@ export const GameTable: React.FC<GameTableProps> = ({
               {phase !== 'ROUND_RESULT' && (
                 <button
                   onClick={handleSkipShowdown}
-                  className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] flex items-center gap-0.5 cursor-pointer shrink-0 ml-1"
+                  className={`px-2 py-0.5 rounded-lg text-[10px] flex items-center gap-0.5 cursor-pointer shrink-0 ml-1 border ${
+                    isGreen
+                      ? 'bg-[#042015] hover:bg-[#073623] border-emerald-800 text-emerald-300'
+                      : 'bg-[#042535] hover:bg-[#073f5a] border-teal-800 text-teal-300'
+                  }`}
                   title="跳过比牌动画直接看结算"
                 >
                   <FastForward className="w-3 h-3 text-amber-400" />
@@ -1934,7 +2064,11 @@ export const GameTable: React.FC<GameTableProps> = ({
             <button
               type="button"
               onClick={handleResetToBestHand}
-              className="px-2 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 text-slate-300 hover:text-white rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95"
+              className={`px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95 border ${
+                isGreen
+                  ? 'bg-[#042015] hover:bg-[#073623] border-emerald-700/80 text-emerald-200'
+                  : 'bg-[#042535] hover:bg-[#073f5a] border-teal-700/80 text-teal-200'
+              }`}
               title="一键恢复推荐的最佳顺牌组合"
             >
               <RotateCcw className="w-3 h-3 text-amber-400" />
@@ -1945,7 +2079,11 @@ export const GameTable: React.FC<GameTableProps> = ({
             <button
               type="button"
               onClick={handleToggleCardSort}
-              className="px-2 py-1 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 text-slate-300 hover:text-white rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95"
+              className={`px-2 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs active:scale-95 border ${
+                isGreen
+                  ? 'bg-[#042015] hover:bg-[#073623] border-emerald-700/80 text-emerald-200'
+                  : 'bg-[#042535] hover:bg-[#073f5a] border-teal-700/80 text-teal-200'
+              }`}
               title={sortBySuit ? '当前按花色排列，点击按点数大小排列' : '当前按点数大小排列，点击按花色排列'}
             >
               <span className="font-bold text-amber-400">⇅</span>
@@ -1963,14 +2101,26 @@ export const GameTable: React.FC<GameTableProps> = ({
                   <span className="truncate">⚠️ 倒水警示</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-1 text-emerald-300 font-bold px-2 py-0.5 bg-emerald-950/90 border border-emerald-500/80 rounded-lg truncate shadow-xs">
+                <div
+                  className={`flex items-center gap-1 font-bold px-2 py-0.5 rounded-lg truncate shadow-xs border ${
+                    isGreen
+                      ? 'bg-emerald-950/90 border-emerald-500/80 text-emerald-300'
+                      : 'bg-teal-950/90 border-teal-500/80 text-teal-300'
+                  }`}
+                >
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                   <span>牌型合规 (无倒水)</span>
                 </div>
               );
             })()
           ) : (
-            <div className="text-slate-400 font-mono text-[10px] bg-slate-900/80 px-2 py-0.5 rounded-lg border border-slate-800">
+            <div
+              className={`font-mono text-[10px] px-2 py-0.5 rounded-lg border ${
+                isGreen
+                  ? 'bg-[#042015] border-emerald-900 text-emerald-400/80'
+                  : 'bg-[#042535] border-teal-900 text-teal-400/80'
+              }`}
+            >
               已放置: <span className="text-amber-400 font-bold">{headCards.length + midCards.length + tailCards.length}</span>/13张
             </div>
           )}
@@ -1979,9 +2129,19 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       {/* 4. CLEAN BOTTOM ACTIONS (WAITING OR ARRANGING) */}
       {phase === 'WAITING' && (
-        <footer className="w-full max-w-lg mx-auto p-2 bg-[#0F172A] border-t border-slate-800/80 flex items-center gap-2 z-30 shrink-0 shadow-lg">
+        <footer
+          className={`w-full max-w-lg mx-auto p-2 border-t flex items-center gap-2 z-30 shrink-0 shadow-lg transition-colors ${
+            isGreen ? 'bg-[#052115]/95 border-emerald-900/80' : 'bg-[#042535]/95 border-teal-900/80'
+          }`}
+        >
           {realPlayersCount < 2 ? (
-            <div className="w-full py-2.5 bg-slate-900 border border-slate-800 text-slate-400 font-bold text-xs rounded-xl text-center flex items-center justify-center gap-1.5">
+            <div
+              className={`w-full py-2.5 border font-bold text-xs rounded-xl text-center flex items-center justify-center gap-1.5 ${
+                isGreen
+                  ? 'bg-[#031910] border-emerald-900 text-emerald-400/80'
+                  : 'bg-[#031e2b] border-teal-900 text-teal-400/80'
+              }`}
+            >
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
               <span>⏳ 等待至少 2 位真实玩家选择座位入座 (当前 {realPlayersCount}/{maxRoomSeats})...</span>
             </div>
@@ -1999,7 +2159,11 @@ export const GameTable: React.FC<GameTableProps> = ({
       )}
 
       {phase === 'ARRANGING' && (
-        <footer className="w-full max-w-lg mx-auto p-2 bg-[#0F172A] border-t border-slate-800/80 flex items-center gap-2 z-30 shrink-0 shadow-lg">
+        <footer
+          className={`w-full max-w-lg mx-auto p-2 border-t flex items-center gap-2 z-30 shrink-0 shadow-lg transition-colors ${
+            isGreen ? 'bg-[#052115]/95 border-emerald-900/80' : 'bg-[#042535]/95 border-teal-900/80'
+          }`}
+        >
           {/* Button 0: 自动理牌 / 托管切换 */}
           <button
             type="button"
@@ -2012,8 +2176,10 @@ export const GameTable: React.FC<GameTableProps> = ({
             }}
             className={`py-2.5 px-3 border font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95 shrink-0 ${
               isHosting
-                ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold ring-2 ring-amber-400/40'
-                : 'bg-[#0B1120] hover:bg-slate-800 border-slate-700 text-slate-300'
+                ? 'bg-amber-400 text-slate-950 border-amber-300 font-black ring-2 ring-amber-400/40'
+                : isGreen
+                ? 'bg-[#031910] hover:bg-[#073623] border-emerald-700/80 text-emerald-200'
+                : 'bg-[#031d2a] hover:bg-[#073f5a] border-teal-700/80 text-teal-200'
             }`}
             title={isHosting ? '点击取消托管' : '点击开启自动理牌托管'}
           >
@@ -2024,7 +2190,9 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* Button 1: 变换牌型 (Cycle combinations) */}
           <button
             onClick={handleCycleSmartHand}
-            className="flex-1 py-2.5 px-3 bg-[#0B1120] hover:bg-slate-800 border border-amber-500/50 hover:border-amber-400 text-amber-400 font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95"
+            className={`flex-1 py-2.5 px-3 border border-amber-500/70 hover:border-amber-400 text-amber-300 font-extrabold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95 ${
+              isGreen ? 'bg-[#031910] hover:bg-[#073623]' : 'bg-[#031d2a] hover:bg-[#073f5a]'
+            }`}
             title="一键循环切换推荐的最佳牌型"
           >
             <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
@@ -2034,7 +2202,11 @@ export const GameTable: React.FC<GameTableProps> = ({
           {/* Button 2: 提交牌型 (Checks strictly 3/5/5 upon click) */}
           <button
             onClick={handleSubmitHand}
-            className="flex-1 py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+            className={`flex-1 py-2.5 px-3 text-white font-extrabold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-lg active:scale-95 ${
+              isGreen
+                ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 shadow-emerald-500/25 ring-1 ring-emerald-400/50'
+                : 'bg-gradient-to-r from-teal-500 via-cyan-500 to-teal-600 hover:from-teal-400 hover:to-cyan-400 shadow-cyan-500/25 ring-1 ring-cyan-400/50'
+            }`}
           >
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>提交牌型 (3/5/5)</span>

@@ -154,11 +154,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }}
     >
       <div
-        className="bg-[#0F172A] border-2 border-slate-700/80 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95"
+        className="bg-[#052115] border-2 border-emerald-800/80 rounded-3xl w-full max-w-md shadow-2xl shadow-emerald-950/80 overflow-hidden flex flex-col animate-in zoom-in-95"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-[#0B1120]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-emerald-900/60 bg-[#031910]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-slate-950 font-bold shadow-md shadow-amber-500/20">
               🀄
@@ -175,7 +175,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {!isForced && (
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+              className="w-8 h-8 rounded-full bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors border border-emerald-800/60"
             >
               <X className="w-4 h-4" />
             </button>
@@ -184,7 +184,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Tab Switcher (When not in profile view) */}
         {tab !== 'profile' && (
-          <div className="grid grid-cols-2 p-1.5 bg-slate-950 border-b border-slate-800/80 text-xs font-bold">
+          <div className="grid grid-cols-2 p-1.5 bg-[#03150e] border-b border-emerald-900/60 text-xs font-bold">
             <button
               onClick={() => {
                 setTab('login');
@@ -405,8 +405,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {tab === 'profile' && currentUser.isLoggedIn && (
             <div className="flex flex-col gap-4">
               {/* Profile Card */}
-              <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl flex items-center gap-3">
-                <div className="text-4xl w-14 h-14 bg-slate-900 border-2 border-amber-400 rounded-2xl flex items-center justify-center shadow-lg">
+              <div className="p-4 bg-[#031910] border border-emerald-900/80 rounded-2xl flex items-center gap-3">
+                <div className="text-4xl w-14 h-14 bg-[#02130c] border-2 border-amber-400 rounded-2xl flex items-center justify-center shadow-lg">
                   {currentUser.avatar}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -428,16 +428,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               {/* Stats Grid */}
               <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl">
-                  <div className="text-slate-400">总局数</div>
+                <div className="p-2.5 bg-[#031910] border border-emerald-900/60 rounded-xl">
+                  <div className="text-emerald-300/80">总局数</div>
                   <div className="font-mono font-bold text-white mt-0.5">{currentUser.totalGames}</div>
                 </div>
-                <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl">
-                  <div className="text-slate-400">胜场</div>
+                <div className="p-2.5 bg-[#031910] border border-emerald-900/60 rounded-xl">
+                  <div className="text-emerald-300/80">胜场</div>
                   <div className="font-mono font-bold text-emerald-400 mt-0.5">{currentUser.totalWins}</div>
                 </div>
-                <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl">
-                  <div className="text-slate-400">胜率</div>
+                <div className="p-2.5 bg-[#031910] border border-emerald-900/60 rounded-xl">
+                  <div className="text-emerald-300/80">胜率</div>
                   <div className="font-mono font-bold text-amber-400 mt-0.5">
                     {currentUser.totalGames > 0
                       ? `${Math.round((currentUser.totalWins / currentUser.totalGames) * 100)}%`

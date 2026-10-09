@@ -567,12 +567,26 @@ export const SoundEffects = {
     this.playVoiceChirp();
     if (audioUrl) {
       try {
+        if (activePhraseAudio) {
+          try {
+            activePhraseAudio.pause();
+            activePhraseAudio.currentTime = 0;
+          } catch {}
+        }
         const audio = new Audio(audioUrl);
-        audio.play().catch(() => {
-          this.speakMandarin(textContent || '收到语音消息');
-        });
+        audio.volume = 1.0;
+        activePhraseAudio = audio;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn('[Audio] Direct voice playback failed, fallback to TTS:', err);
+            this.speakMandarin(textContent || '收到语音消息');
+          });
+        }
         return;
-      } catch {}
+      } catch (e) {
+        console.warn('[Audio] Audio playVoiceMessage error:', e);
+      }
     }
     this.speakMandarin(textContent || '收到一条语音消息！');
   },

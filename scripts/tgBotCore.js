@@ -476,45 +476,14 @@ export async function handleBotMessage(msg, options = {}) {
       saveAuthorizedPhones(list);
     }
 
-    // 同步初始化/检查全服玩家账号库 users.json，保证任意手机端输入该手机号均能直接识别并登录
-    const users = getRegisteredUsers();
-    let existingUser = users.find((u) => {
-      const p = String(u.phone || '').replace(/[\s\-()]/g, '').replace(/^(\+?86|0086)/, '').trim();
-      return p === phone;
-    });
-
-    if (!existingUser) {
-      existingUser = {
-        id: `u_${phone.slice(-4)}_${Date.now()}`,
-        phone: phone,
-        password: '888888', // 初始默认密码
-        nickname: `雀友_${phone.slice(-4)}`,
-        avatar: '🧙',
-        token: `tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        chips: 1000,
-        isLoggedIn: false,
-        totalGames: 0,
-        totalWins: 0,
-        gunShots: 0,
-        grandSlams: 0,
-        specialHands: 0,
-        createdAt: Date.now(),
-        lastLoginAt: Date.now()
-      };
-      users.push(existingUser);
-      saveRegisteredUsers(users);
-    }
-
     return reply(
       chatId,
-      `✅ <b>手机号授权成功！全服已同步就绪</b>\n\n` +
-      `📱 <b>授权手机号</b>: <code>${phone}</code>\n` +
-      `🔑 <b>初始登录密码</b>: <code>${existingUser.password || '888888'}</code>\n` +
-      `👤 <b>默认昵称</b>: <b>${escapeHtml(existingUser.nickname)}</b>\n` +
-      `💰 <b>初始水数</b>: <b>${(existingUser.chips || 1000).toLocaleString()} 水</b>\n\n` +
-      `🎉 <b>全设备通用登录说明</b>:\n` +
-      `• 玩家可在<b>任意手机/电脑</b>直接输入手机号与密码登录，永不提示“未找到账号”！\n` +
-      `• 亦可在网页端“注册”界面重新设定个性化昵称、头像与自定义密码。`
+      `✅ <b>手机号授权成功！白名单已更新</b>\n\n` +
+      `📱 <b>授权手机号</b>: <code>${phone}</code>\n\n` +
+      `📌 <b>注册与账号说明</b>:\n` +
+      `• 本授权仅开通白名单资格，<b>不预建密码、不预设昵称</b>。\n` +
+      `• 玩家需在游戏网页端【注册】页面自行创建昵称和6位密码方可登录。\n` +
+      `• <b>新注册用户不赠送积分</b>（初始水数为 0），后续可由管理员通过积分管理划拨水数。`
     );
   }
 

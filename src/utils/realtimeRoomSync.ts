@@ -76,29 +76,40 @@ export async function syncRoomStateApi(payload: {
   return syncRoomLocally(payload);
 }
 
-// Send chat/emoji action to room
+// Send chat/emoji/voice action to room
 export async function sendRoomChatApi(payload: {
+  id?: string;
   roomId: string;
   senderId: string;
   senderName: string;
+  phone?: string;
   text?: string;
   type?: 'text' | 'voice' | 'emoji';
   audioBlobUrl?: string;
   duration?: number;
 }): Promise<void> {
+  const fullPayload = {
+    ...payload,
+    id: payload.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+  };
+
   try {
     await fetch('/api/room/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(fullPayload)
     });
   } catch (err) {
-    // Broadcast locally
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    console.warn('[Room Chat] Server send failed, broadcasting locally:', err);
+  }
+
+  // Always broadcast locally to same-origin tabs/windows for instant response
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try {
       const bc = new BroadcastChannel('shisanshui_room_channel');
-      bc.postMessage({ type: 'CHAT', payload });
+      bc.postMessage({ type: 'CHAT', payload: fullPayload });
       bc.close();
-    }
+    } catch {}
   }
 }
 

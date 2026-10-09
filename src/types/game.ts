@@ -65,6 +65,7 @@ export interface Player {
   id: string;
   name: string;
   avatar: string;
+  phone?: string;
   isAi: boolean;
   cards: Card[]; // All 13 dealt cards
   arrangement: PlayerHandArrangement;
@@ -159,10 +160,12 @@ export interface SpeechBubble {
   playerId: string;
   senderId?: string;
   senderName?: string;
+  phone?: string;
   text: string;
   createdAt: number;
   type?: 'text' | 'voice';
   audioUrl?: string;
+  audioBlobUrl?: string;
   duration?: number;
 }
 

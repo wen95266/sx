@@ -146,13 +146,19 @@ export const GameTable: React.FC<GameTableProps> = ({
   const [selectedVoiceTab, setSelectedVoiceTab] = useState<string>('all');
   const [voiceSearchQuery, setVoiceSearchQuery] = useState('');
 
+  const seenChatIdsRef = useRef<Set<string>>(new Set());
+
   // Send Humorous Voice Phrase with persona speech synthesis
   const handleSendVoicePhrase = (vp: VoicePhrase) => {
     const content = `【${vp.avatar} ${vp.roleTitle}】${vp.text}`;
     const myName = currentUser.nickname || '我';
+    const bubbleId = `bubble_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const bubble: SpeechBubble = {
-      id: `bubble_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      id: bubbleId,
       playerId: 'player_me',
+      senderId: currentUser.id || 'player_me',
+      senderName: myName,
+      phone: currentUser.phone,
       text: content,
       type: 'voice',
       duration: 2,
@@ -165,17 +171,21 @@ export const GameTable: React.FC<GameTableProps> = ({
       SoundEffects.playVoicePhrase(vp);
     }
 
+    seenChatIdsRef.current.add(bubbleId);
+
     sendRoomChatApi({
+      id: bubbleId,
       roomId: currentRoom?.id || 'room_realtime_4',
       senderId: currentUser.id || 'player_me',
       senderName: myName,
+      phone: currentUser.phone,
       text: content,
       type: 'voice',
       duration: 2
     });
 
     setTimeout(() => {
-      setSpeechBubbles((prev) => prev.filter((b) => b.id !== bubble.id));
+      setSpeechBubbles((prev) => prev.filter((b) => b.id !== bubbleId));
     }, 5500);
   };
 
@@ -211,6 +221,8 @@ export const GameTable: React.FC<GameTableProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const recordStartTimeRef = useRef<number>(0);
+  const hasInitialSyncRef = useRef<boolean>(false);
   const lastPlayedChatIdRef = useRef<string | null>(null);
 
   // Sound switch
@@ -250,8 +262,8 @@ export const GameTable: React.FC<GameTableProps> = ({
         if (syncedState.hostUserId) setHostUserId(syncedState.hostUserId);
 
         // Map seats to real players (no AI bots filler)
+        const currentMappedPlayers: Player[] = [];
         if (syncedState.seats) {
-          const mappedPlayers: Player[] = [];
           syncedState.seats.forEach((sp) => {
             if (sp) {
               const isMe = sp.id === userId || sp.id === 'player_me';
@@ -275,10 +287,11 @@ export const GameTable: React.FC<GameTableProps> = ({
                 if (soundEnabled) SoundEffects.playDealCard();
               }
 
-              mappedPlayers.push({
+              currentMappedPlayers.push({
                 id: isMe ? 'player_me' : sp.id,
                 name: isMe ? (currentUser.nickname || '我') : sp.name,
                 avatar: isMe ? (currentUser.avatar || '😎') : sp.avatar,
+                phone: sp.phone,
                 isAi: false,
                 isReady: true,
                 totalScore: 0,
@@ -301,20 +314,77 @@ export const GameTable: React.FC<GameTableProps> = ({
               });
             }
           });
-          setPlayers(mappedPlayers);
+          setPlayers(currentMappedPlayers);
         }
 
-        // Update chat feeds if any
+        // Update chat feeds and play voice / phrases for opponents
         if (syncedState.chatBubbles && syncedState.chatBubbles.length > 0) {
-          const latest = syncedState.chatBubbles[syncedState.chatBubbles.length - 1];
-          setLatestChatMessage({ sender: latest.senderName || '在线玩家', text: latest.text || '语音与表情消息' });
-          const sender = latest.senderId || latest.playerId;
-          if (sender !== userId && latest.id !== lastPlayedChatIdRef.current && soundEnabled) {
-            lastPlayedChatIdRef.current = latest.id;
-            const matched = HUMOROUS_VOICE_PHRASES.find((p) => latest.text?.includes(p.text));
-            if (matched) {
-              SoundEffects.playVoicePhrase(matched);
-            }
+          if (!hasInitialSyncRef.current) {
+            // Seed seen set with historical messages so joining doesn't replay loud old history
+            syncedState.chatBubbles.forEach((b) => {
+              if (b.id) seenChatIdsRef.current.add(b.id);
+            });
+            hasInitialSyncRef.current = true;
+          } else {
+            syncedState.chatBubbles.forEach((bubble) => {
+              const sender = bubble.senderId || bubble.playerId;
+              const isMe = sender === userId || (currentUser.phone && bubble.phone === currentUser.phone);
+              if (!isMe && bubble.id && !seenChatIdsRef.current.has(bubble.id)) {
+                seenChatIdsRef.current.add(bubble.id);
+
+                setLatestChatMessage({
+                  sender: bubble.senderName || '在线玩家',
+                  text: bubble.text || (bubble.audioBlobUrl ? '🎙️ 语音消息' : '收到新消息')
+                });
+
+                // Find seat of sender
+                const senderPlayer = currentMappedPlayers.find(
+                  (p: Player) => p.id === sender || (p.phone && p.phone === bubble.phone) || p.name === bubble.senderName
+                );
+                const targetPlayerId = senderPlayer ? senderPlayer.id : 'player_opponent';
+
+                const newBubble: SpeechBubble = {
+                  id: bubble.id,
+                  playerId: targetPlayerId,
+                  senderId: bubble.senderId,
+                  senderName: bubble.senderName,
+                  phone: bubble.phone,
+                  text: bubble.text || '语音消息',
+                  type: bubble.type || (bubble.audioBlobUrl ? 'voice' : 'text'),
+                  audioUrl: bubble.audioBlobUrl || bubble.audioUrl,
+                  audioBlobUrl: bubble.audioBlobUrl || bubble.audioUrl,
+                  duration: bubble.duration || 2,
+                  createdAt: Date.now()
+                };
+
+                setSpeechBubbles((prev) => {
+                  if (prev.some((b) => b.id === bubble.id)) return prev;
+                  return [...prev, newBubble];
+                });
+
+                setTimeout(() => {
+                  setSpeechBubbles((prev) => prev.filter((b) => b.id !== bubble.id));
+                }, ((bubble.duration || 2) + 5) * 1000);
+
+                // Play Audio
+                if (soundEnabled) {
+                  const audioToPlay = bubble.audioBlobUrl || bubble.audioUrl;
+                  if (audioToPlay) {
+                    console.log('[Voice] Playing real opponent microphone audio:', bubble.id);
+                    SoundEffects.playVoiceMessage(audioToPlay, bubble.text);
+                  } else {
+                    const matched = HUMOROUS_VOICE_PHRASES.find(
+                      (p) => bubble.text && (bubble.text.includes(p.text) || p.text.includes(bubble.text))
+                    );
+                    if (matched) {
+                      SoundEffects.playVoicePhrase(matched);
+                    } else if (bubble.text) {
+                      SoundEffects.speakMandarin(bubble.text);
+                    }
+                  }
+                }
+              }
+            });
           }
         }
       } catch (err) {
@@ -336,6 +406,76 @@ export const GameTable: React.FC<GameTableProps> = ({
       doSync('leave');
     };
   }, [currentRoom, currentUser, phase, headCards, midCards, tailCards, soundEnabled]);
+
+  // Zero-latency cross-tab room channel listener for voice and phrases
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
+    const bc = new BroadcastChannel('shisanshui_room_channel');
+    bc.onmessage = (e) => {
+      if (e.data?.type === 'CHAT' && e.data?.payload) {
+        const payload = e.data.payload;
+        const sender = payload.senderId;
+        const isMe = sender === (currentUser.id || 'player_me') || (currentUser.phone && payload.phone === currentUser.phone);
+        const msgId = payload.id || `bc_${payload.senderId}_${Date.now()}`;
+
+        if (!isMe && !seenChatIdsRef.current.has(msgId)) {
+          seenChatIdsRef.current.add(msgId);
+          setLatestChatMessage({
+            sender: payload.senderName || '在线玩家',
+            text: payload.text || (payload.audioBlobUrl ? '🎙️ 语音消息' : '收到新消息')
+          });
+
+          const senderPlayer = players.find(
+            (p) => p.id === sender || (p.phone && p.phone === payload.phone) || p.name === payload.senderName
+          );
+          const targetPlayerId = senderPlayer ? senderPlayer.id : 'player_opponent';
+
+          const newBubble: SpeechBubble = {
+            id: msgId,
+            playerId: targetPlayerId,
+            senderId: payload.senderId,
+            senderName: payload.senderName,
+            phone: payload.phone,
+            text: payload.text || '语音消息',
+            type: payload.type || (payload.audioBlobUrl ? 'voice' : 'text'),
+            audioUrl: payload.audioBlobUrl,
+            audioBlobUrl: payload.audioBlobUrl,
+            duration: payload.duration || 2,
+            createdAt: Date.now()
+          };
+
+          setSpeechBubbles((prev) => {
+            if (prev.some((b) => b.id === msgId)) return prev;
+            return [...prev, newBubble];
+          });
+
+          setTimeout(() => {
+            setSpeechBubbles((prev) => prev.filter((b) => b.id !== msgId));
+          }, ((payload.duration || 2) + 5) * 1000);
+
+          if (soundEnabled) {
+            if (payload.audioBlobUrl) {
+              console.log('[Voice BC] Playing incoming microphone voice:', msgId);
+              SoundEffects.playVoiceMessage(payload.audioBlobUrl, payload.text);
+            } else {
+              const matched = HUMOROUS_VOICE_PHRASES.find(
+                (p) => payload.text && (payload.text.includes(p.text) || p.text.includes(payload.text))
+              );
+              if (matched) {
+                SoundEffects.playVoicePhrase(matched);
+              } else if (payload.text) {
+                SoundEffects.speakMandarin(payload.text);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    return () => {
+      bc.close();
+    };
+  }, [players, soundEnabled, currentUser]);
 
   const activeParticipants = players;
   const activePlayerCount = players.length;
@@ -846,9 +986,15 @@ export const GameTable: React.FC<GameTableProps> = ({
     if (!content) return;
 
     const myName = currentUser.nickname || '我';
+    const myId = currentUser.id || 'player_me';
+    const bubbleId = `bubble_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
     const bubble: SpeechBubble = {
-      id: `bubble_${Date.now()}`,
+      id: bubbleId,
       playerId: 'player_me',
+      senderId: myId,
+      senderName: myName,
+      phone: currentUser.phone,
       text: content,
       type: 'text',
       createdAt: Date.now()
@@ -862,20 +1008,39 @@ export const GameTable: React.FC<GameTableProps> = ({
       SoundEffects.speakMandarin(content);
     }
 
+    seenChatIdsRef.current.add(bubbleId);
+
+    sendRoomChatApi({
+      id: bubbleId,
+      roomId: currentRoom?.id || 'room_realtime_4',
+      senderId: myId,
+      senderName: myName,
+      phone: currentUser.phone,
+      text: content,
+      type: 'text'
+    });
+
     setTimeout(() => {
-      setSpeechBubbles((prev) => prev.filter((b) => b.id !== bubble.id));
+      setSpeechBubbles((prev) => prev.filter((b) => b.id !== bubbleId));
     }, 4500);
   };
 
   // Send Voice Message (Real Mic Audio or Spoken Voice)
   const handleSendVoice = (voiceText: string, audioUrl?: string, duration = 2) => {
     const myName = currentUser.nickname || '我';
+    const myId = currentUser.id || 'player_me';
+    const bubbleId = `bubble_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
     const bubble: SpeechBubble = {
-      id: `bubble_${Date.now()}`,
+      id: bubbleId,
       playerId: 'player_me',
+      senderId: myId,
+      senderName: myName,
+      phone: currentUser.phone,
       text: voiceText,
       type: 'voice',
       audioUrl,
+      audioBlobUrl: audioUrl,
       duration,
       createdAt: Date.now()
     };
@@ -886,9 +1051,24 @@ export const GameTable: React.FC<GameTableProps> = ({
       SoundEffects.playVoiceMessage(audioUrl, voiceText);
     }
 
+    seenChatIdsRef.current.add(bubbleId);
+
+    // Send to other players in the room
+    sendRoomChatApi({
+      id: bubbleId,
+      roomId: currentRoom?.id || 'room_realtime_4',
+      senderId: myId,
+      senderName: myName,
+      phone: currentUser.phone,
+      text: voiceText,
+      type: 'voice',
+      audioBlobUrl: audioUrl,
+      duration
+    });
+
     setTimeout(() => {
-      setSpeechBubbles((prev) => prev.filter((b) => b.id !== bubble.id));
-    }, 5500);
+      setSpeechBubbles((prev) => prev.filter((b) => b.id !== bubbleId));
+    }, (duration + 5) * 1000);
   };
 
   // Start Real Microphone Recording
@@ -901,21 +1081,40 @@ export const GameTable: React.FC<GameTableProps> = ({
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
-      const mediaRecorder = new MediaRecorder(stream);
+
+      let chosenMimeType = '';
+      if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) chosenMimeType = 'audio/webm;codecs=opus';
+        else if (MediaRecorder.isTypeSupported('audio/webm')) chosenMimeType = 'audio/webm';
+        else if (MediaRecorder.isTypeSupported('audio/mp4')) chosenMimeType = 'audio/mp4';
+        else if (MediaRecorder.isTypeSupported('audio/aac')) chosenMimeType = 'audio/aac';
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, chosenMimeType ? { mimeType: chosenMimeType } : undefined);
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const finalSec = Math.max(1, recordSeconds);
-        handleSendVoice(`【对讲语音】0:0${finalSec}`, audioUrl, finalSec);
+        const actualType = mediaRecorder.mimeType || chosenMimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: actualType });
+        const finalSec = Math.max(1, Math.min(10, Math.round((Date.now() - recordStartTimeRef.current) / 1000)));
+        const voiceText = `【对讲语音】0:0${finalSec}`;
+
+        // Convert Blob to Data URL so it can be reliably broadcasted across different devices
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64DataUrl = typeof reader.result === 'string' ? reader.result : '';
+          handleSendVoice(voiceText, base64DataUrl, finalSec);
+        };
+        reader.readAsDataURL(audioBlob);
+
         stream.getTracks().forEach((t) => t.stop());
       };
 
+      recordStartTimeRef.current = Date.now();
       mediaRecorder.start();
       setIsRecording(true);
       setRecordSeconds(0);
@@ -938,7 +1137,9 @@ export const GameTable: React.FC<GameTableProps> = ({
   const stopRecording = () => {
     if (recordTimerRef.current) clearInterval(recordTimerRef.current);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
     }
     setIsRecording(false);
   };
@@ -946,7 +1147,8 @@ export const GameTable: React.FC<GameTableProps> = ({
   // Click voice bubble to replay audio
   const handlePlayBubble = (b: SpeechBubble) => {
     setPlayingBubbleId(b.id);
-    SoundEffects.playVoiceMessage(b.audioUrl, b.text);
+    const audioToPlay = b.audioBlobUrl || b.audioUrl;
+    SoundEffects.playVoiceMessage(audioToPlay, b.text);
     setTimeout(() => setPlayingBubbleId(null), (b.duration || 2) * 1000 + 300);
   };
 

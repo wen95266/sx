@@ -214,7 +214,7 @@ export function getStoredUser(): UserProfile {
     nickname: '未登录玩家',
     avatar: '😎',
     token: '',
-    chips: 1000,
+    chips: 0,
     isLoggedIn: false,
     totalGames: 0,
     totalWins: 0,
@@ -544,7 +544,7 @@ export async function registerWithPhone(
     nickname: cleanNickname,
     avatar: chosenAvatar,
     token: `tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-    chips: 1000,
+    chips: 0, // 新用户注册不赠送积分，初始水数为 0
     isLoggedIn: true,
     totalGames: 0,
     totalWins: 0,
@@ -556,13 +556,13 @@ export async function registerWithPhone(
   };
 
   saveUser(newUser);
-  return { success: true, message: '🎉 注册成功，欢迎加入十三水对战场！', user: newUser };
+  return { success: true, message: '🎉 注册成功，欢迎加入十三水对战场！初始水数为 0。', user: newUser };
 }
 
 export async function loginWithPhone(
   phone: string,
   password: string
-): Promise<{ success: boolean; message: string; user?: UserProfile }> {
+): Promise<{ success: boolean; message: string; needRegister?: boolean; user?: UserProfile }> {
   const cleanPhone = normalizePhoneNumber(phone);
   const cleanPassword = password.trim();
 
@@ -573,7 +573,7 @@ export async function loginWithPhone(
     return { success: false, message: '请输入 6 位密码！' };
   }
 
-  // 1. 核心关键：发起服务端跨设备登录校验 (解决另一台手机提示未找到账号的问题)
+  // 1. 核心关键：发起服务端跨设备登录校验
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
@@ -594,7 +594,7 @@ export async function loginWithPhone(
     }
 
     if (data && data.message) {
-      return { success: false, message: data.message };
+      return { success: false, needRegister: !!data.needRegister, message: data.message };
     }
   } catch (err) {
     console.warn('[Login] 无法连接服务端账号验证接口，尝试本地离线比对', err);
@@ -609,26 +609,11 @@ export async function loginWithPhone(
 
   if (!account) {
     if (isPhoneAuthorized(cleanPhone)) {
-      const autoUser: UserProfile = {
-        id: `u_${cleanPhone.slice(-4)}_${Date.now()}`,
-        phone: cleanPhone,
-        password: cleanPassword,
-        nickname: `雀友_${cleanPhone.slice(-4)}`,
-        avatar: '🧙',
-        token: `tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        chips: 1000,
-        isLoggedIn: true,
-        totalGames: 0,
-        totalWins: 0,
-        gunShots: 0,
-        grandSlams: 0,
-        specialHands: 0,
-        createdAt: Date.now(),
-        lastLoginAt: Date.now()
+      return {
+        success: false,
+        needRegister: true,
+        message: `该手机号 (${cleanPhone}) 已获得管理员授权，但尚未注册账号！请前往【注册】页面设定专属昵称和6位密码。`
       };
-      saveUser(autoUser);
-      syncLocalAccountsToServer().catch(() => {});
-      return { success: true, message: '✓ 白名单授权验证通过，已为您激活账号并进入大厅！', user: autoUser };
     }
 
     return {
@@ -638,7 +623,7 @@ export async function loginWithPhone(
   }
 
   if (account.password && account.password !== cleanPassword) {
-    return { success: false, message: '密码不正确，请重新输入 6 位密码！' };
+    return { success: false, message: '密码错误！请输入您注册时设定的 6 位密码。' };
   }
 
   account.isLoggedIn = true;

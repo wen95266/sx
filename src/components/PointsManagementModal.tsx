@@ -97,7 +97,7 @@ export const PointsManagementModal: React.FC<PointsManagementModalProps> = ({
   };
 
   // Perform mutual points gifting
-  const handleExecuteTransfer = () => {
+  const handleExecuteTransfer = async () => {
     if (!searchedUser) {
       setFeedback({ type: 'error', message: '请先搜索并选择要赠送的玩家！' });
       SoundEffects.playWarning();
@@ -125,7 +125,7 @@ export const PointsManagementModal: React.FC<PointsManagementModalProps> = ({
       return;
     }
 
-    const res = transferChips(searchedUser.phone, transferAmount, transferNote);
+    const res = await transferChips(searchedUser.phone, transferAmount, transferNote);
 
     if (res.success && res.fromUser) {
       onUserChange(res.fromUser);

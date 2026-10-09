@@ -11,10 +11,17 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// 项目根目录 (scripts 的上一级目录)
+const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 // 1. 环境变量加载器
 export function loadBotEnv() {
   const possiblePaths = [
+    path.resolve(PROJECT_ROOT, '.env'),
     path.resolve(process.cwd(), '.env'),
     path.resolve(os.homedir(), 'sx', '.env'),
     path.resolve(os.homedir(), '.env')
@@ -72,14 +79,24 @@ export function getBotConfig() {
   };
 }
 
-// 3. 白名单数据存储
-const AUTH_FILE_PATH = path.resolve(process.cwd(), 'authorized_phones.json');
-const PUBLIC_AUTH_FILE_PATH = path.resolve(process.cwd(), 'public', 'authorized_phones.json');
-const DIST_AUTH_FILE_PATH = path.resolve(process.cwd(), 'dist', 'authorized_phones.json');
+// 3. 白名单与玩家账号文件路径解析器
+function getCandidateFilePaths(fileName) {
+  const baseDirs = [
+    PROJECT_ROOT,
+    path.resolve(PROJECT_ROOT, 'public'),
+    process.cwd(),
+    path.resolve(process.cwd(), 'public'),
+    path.resolve(os.homedir(), 'sx'),
+    path.resolve(os.homedir(), 'sx', 'public'),
+    path.resolve(PROJECT_ROOT, 'dist'),
+    path.resolve(process.cwd(), 'dist')
+  ];
+  return Array.from(new Set(baseDirs.map((d) => path.resolve(d, fileName))));
+}
 
 export function getAuthorizedPhones() {
-  const possiblePaths = [PUBLIC_AUTH_FILE_PATH, AUTH_FILE_PATH, DIST_AUTH_FILE_PATH];
-  for (const p of possiblePaths) {
+  const paths = getCandidateFilePaths('authorized_phones.json');
+  for (const p of paths) {
     try {
       if (fs.existsSync(p)) {
         const raw = fs.readFileSync(p, 'utf8');
@@ -88,27 +105,164 @@ export function getAuthorizedPhones() {
       }
     } catch (e) {}
   }
-  return ['13800138000', '18888888888', '13988888888', '19999999999'];
+  return ['13800138000', '18888888888', '13988888888', '19999999999', '13888888888'];
 }
 
 export function saveAuthorizedPhones(list) {
   try {
     const jsonStr = JSON.stringify(list, null, 2);
-    const publicDir = path.resolve(process.cwd(), 'public');
-    if (!fs.existsSync(publicDir)) {
-      fs.mkdirSync(publicDir, { recursive: true });
-    }
-    fs.writeFileSync(PUBLIC_AUTH_FILE_PATH, jsonStr, 'utf8');
-    fs.writeFileSync(AUTH_FILE_PATH, jsonStr, 'utf8');
-    
-    // 如果存在 dist 目录（生产构建环境），同步更新 dist 中的静态文件，避免静态资源缓存旧版本
-    const distDir = path.resolve(process.cwd(), 'dist');
-    if (fs.existsSync(distDir)) {
-      fs.writeFileSync(DIST_AUTH_FILE_PATH, jsonStr, 'utf8');
+    const targetDirs = [
+      PROJECT_ROOT,
+      path.resolve(PROJECT_ROOT, 'public'),
+      process.cwd(),
+      path.resolve(process.cwd(), 'public')
+    ];
+    const distDir = path.resolve(PROJECT_ROOT, 'dist');
+    if (fs.existsSync(distDir)) targetDirs.push(distDir);
+
+    for (const dir of targetDirs) {
+      if (!fs.existsSync(dir)) {
+        try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+      }
+      try {
+        fs.writeFileSync(path.resolve(dir, 'authorized_phones.json'), jsonStr, 'utf8');
+      } catch (e) {}
     }
     return true;
   } catch (e) {
     console.error('[TG Bot Core] 保存 authorized_phones.json 失败:', e.message);
+    return false;
+  }
+}
+
+// 3.1 玩家全服注册账号持久化存储 (解决跨手机/跨设备登录问题)
+const DEFAULT_PRESEEDED_USERS = [
+  {
+    id: "u_8000_seed",
+    phone: "13800138000",
+    password: "888888",
+    nickname: "雀神老李",
+    avatar: "🧙",
+    token: "tok_seed_1",
+    chips: 12800,
+    isLoggedIn: false,
+    totalGames: 128,
+    totalWins: 86,
+    gunShots: 32,
+    grandSlams: 6,
+    specialHands: 12,
+    createdAt: 1740000000000,
+    lastLoginAt: 1740000000000
+  },
+  {
+    id: "u_8888_seed",
+    phone: "18888888888",
+    password: "888888",
+    nickname: "发财顺风",
+    avatar: "👑",
+    token: "tok_seed_2",
+    chips: 28888,
+    isLoggedIn: false,
+    totalGames: 215,
+    totalWins: 142,
+    gunShots: 58,
+    grandSlams: 15,
+    specialHands: 24,
+    createdAt: 1740000000000,
+    lastLoginAt: 1740000000000
+  },
+  {
+    id: "u_8889_seed",
+    phone: "13988888888",
+    password: "888888",
+    nickname: "九筒大侠",
+    avatar: "🥷",
+    token: "tok_seed_3",
+    chips: 8888,
+    isLoggedIn: false,
+    totalGames: 95,
+    totalWins: 60,
+    gunShots: 18,
+    grandSlams: 3,
+    specialHands: 8,
+    createdAt: 1740000000000,
+    lastLoginAt: 1740000000000
+  },
+  {
+    id: "u_9999_seed",
+    phone: "19999999999",
+    password: "888888",
+    nickname: "十三幺常胜",
+    avatar: "🐉",
+    token: "tok_seed_4",
+    chips: 36800,
+    isLoggedIn: false,
+    totalGames: 340,
+    totalWins: 230,
+    gunShots: 92,
+    grandSlams: 28,
+    specialHands: 38,
+    createdAt: 1740000000000,
+    lastLoginAt: 1740000000000
+  },
+  {
+    id: "u_8880_seed",
+    phone: "13888888888",
+    password: "888888",
+    nickname: "赌圣阿星",
+    avatar: "🤵",
+    token: "tok_seed_5",
+    chips: 16800,
+    isLoggedIn: false,
+    totalGames: 160,
+    totalWins: 110,
+    gunShots: 40,
+    grandSlams: 9,
+    specialHands: 18,
+    createdAt: 1740000000000,
+    lastLoginAt: 1740000000000
+  }
+];
+
+export function getRegisteredUsers() {
+  const paths = getCandidateFilePaths('users.json');
+  for (const p of paths) {
+    try {
+      if (fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, 'utf8');
+        const list = JSON.parse(raw);
+        if (Array.isArray(list) && list.length > 0) return list;
+      }
+    } catch (e) {}
+  }
+  // 未找到或为空时，初始化预置用户并写入持久化文件
+  saveRegisteredUsers(DEFAULT_PRESEEDED_USERS);
+  return [...DEFAULT_PRESEEDED_USERS];
+}
+
+export function saveRegisteredUsers(users) {
+  try {
+    const jsonStr = JSON.stringify(users, null, 2);
+    const targetDirs = [
+      PROJECT_ROOT,
+      path.resolve(PROJECT_ROOT, 'public'),
+      process.cwd(),
+      path.resolve(process.cwd(), 'public')
+    ];
+    const distDir = path.resolve(PROJECT_ROOT, 'dist');
+    if (fs.existsSync(distDir)) targetDirs.push(distDir);
+
+    for (const dir of targetDirs) {
+      if (!fs.existsSync(dir)) {
+        try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+      }
+      try {
+        fs.writeFileSync(path.resolve(dir, 'users.json'), jsonStr, 'utf8');
+      } catch (e) {}
+    }
+    return true;
+  } catch (e) {
+    console.error('[TG Bot Core] 保存 users.json 失败:', e.message);
     return false;
   }
 }
@@ -317,14 +471,50 @@ export async function handleBotMessage(msg, options = {}) {
       );
     }
     const list = getAuthorizedPhones();
-    if (list.includes(phone)) {
-      return reply(chatId, `ℹ️ 手机号 <code>${phone}</code> 已经在授权白名单中，玩家可直接在网页注册！`);
+    if (!list.includes(phone)) {
+      list.push(phone);
+      saveAuthorizedPhones(list);
     }
-    list.push(phone);
-    saveAuthorizedPhones(list);
+
+    // 同步初始化/检查全服玩家账号库 users.json，保证任意手机端输入该手机号均能直接识别并登录
+    const users = getRegisteredUsers();
+    let existingUser = users.find((u) => {
+      const p = String(u.phone || '').replace(/[\s\-()]/g, '').replace(/^(\+?86|0086)/, '').trim();
+      return p === phone;
+    });
+
+    if (!existingUser) {
+      existingUser = {
+        id: `u_${phone.slice(-4)}_${Date.now()}`,
+        phone: phone,
+        password: '888888', // 初始默认密码
+        nickname: `雀友_${phone.slice(-4)}`,
+        avatar: '🧙',
+        token: `tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        chips: 1000,
+        isLoggedIn: false,
+        totalGames: 0,
+        totalWins: 0,
+        gunShots: 0,
+        grandSlams: 0,
+        specialHands: 0,
+        createdAt: Date.now(),
+        lastLoginAt: Date.now()
+      };
+      users.push(existingUser);
+      saveRegisteredUsers(users);
+    }
+
     return reply(
       chatId,
-      `✅ <b>手机号授权成功！</b>\n\n📱 手机号: <code>${phone}</code>\n🎉 白名单已实时持久化至服务器！玩家现在可以在游戏注册界面输入该手机号及 6 位数密码正常注册。`
+      `✅ <b>手机号授权成功！全服已同步就绪</b>\n\n` +
+      `📱 <b>授权手机号</b>: <code>${phone}</code>\n` +
+      `🔑 <b>初始登录密码</b>: <code>${existingUser.password || '888888'}</code>\n` +
+      `👤 <b>默认昵称</b>: <b>${escapeHtml(existingUser.nickname)}</b>\n` +
+      `💰 <b>初始水数</b>: <b>${(existingUser.chips || 1000).toLocaleString()} 水</b>\n\n` +
+      `🎉 <b>全设备通用登录说明</b>:\n` +
+      `• 玩家可在<b>任意手机/电脑</b>直接输入手机号与密码登录，永不提示“未找到账号”！\n` +
+      `• 亦可在网页端“注册”界面重新设定个性化昵称、头像与自定义密码。`
     );
   }
 
@@ -365,14 +555,30 @@ export async function handleBotMessage(msg, options = {}) {
   if (text === '📊 服务器状态' || text === '/status' || text === '/ip') {
     const s = getServerStats();
     const authCount = getAuthorizedPhones().length;
+    const users = getRegisteredUsers();
     const statusMsg = `📊 <b>十三水服务器当前运行状态</b>\n\n` +
       `💻 <b>部署平台</b>: ${s.platform}\n` +
       `🌐 <b>服务访问地址</b>: <code>http://${s.localIp}:${s.port}</code>\n` +
       `💾 <b>运行内存</b>: 剩余 ${s.memFree} MB / 共 ${s.memTotal} MB\n` +
       `⏱️ <b>开机时长</b>: ${s.uptimeHours} 小时\n` +
       `📋 <b>授权手机数</b>: ${authCount} 个\n` +
+      `👥 <b>已注册玩家</b>: ${users.length} 位 (多端通用)\n` +
       `🟢 <b>服务状态</b>: 正常运行 (Active)`;
     return reply(chatId, statusMsg);
+  }
+
+  // 5.1 查看已注册玩家列表
+  if (text === '👥 已注册玩家' || text === '/users' || text === '/players') {
+    const users = getRegisteredUsers();
+    let msgList = `👥 <b>当前已注册玩家列表 (${users.length} 位)：</b>\n\n`;
+    users.slice(0, 30).forEach((u, idx) => {
+      msgList += `${idx + 1}. ${u.avatar || '😎'} <b>${escapeHtml(u.nickname || '玩家')}</b> | <code>${u.phone}</code> | 💰 ${Number(u.chips || 0).toLocaleString()} 水\n`;
+    });
+    if (users.length > 30) {
+      msgList += `\n<i>...仅显示前 30 位，共 ${users.length} 位</i>\n`;
+    }
+    msgList += `\n💡 发送 <code>/chips 手机号 水数</code> 可以给指定玩家充水`;
+    return reply(chatId, msgList);
   }
 
   // 6. 牌桌监控
@@ -412,9 +618,26 @@ export async function handleBotMessage(msg, options = {}) {
 
   if (text.startsWith('/chips ')) {
     const parts = text.replace('/chips ', '').trim().split(' ');
-    const target = parts[0];
-    const amount = parts[1] || '1000';
-    return reply(chatId, `✅ 成功为玩家 <b>${escapeHtml(target)}</b> 补充 <b>+${escapeHtml(amount)} 水</b>！`);
+    const target = (parts[0] || '').trim();
+    const cleanTargetPhone = target.replace(/[\s\-()]/g, '').replace(/^(\+?86|0086)/, '');
+    const addAmount = parseInt(parts[1] || '1000', 10);
+
+    const users = getRegisteredUsers();
+    const user = users.find((u) => u.phone === cleanTargetPhone || u.nickname === target);
+
+    if (user) {
+      user.chips = (Number(user.chips) || 0) + addAmount;
+      saveRegisteredUsers(users);
+      return reply(
+        chatId,
+        `✅ <b>加水成功！</b>\n\n👤 玩家: <b>${escapeHtml(user.nickname)}</b>\n📱 手机号: <code>${user.phone}</code>\n💰 充值增量: <b>+${addAmount.toLocaleString()} 水</b>\n💎 充后总资产: <b>${Number(user.chips).toLocaleString()} 水</b>`
+      );
+    }
+
+    return reply(
+      chatId,
+      `⚠️ <b>未找到对应玩家</b>: <code>${escapeHtml(target)}</code>\n\n提示：该手机号可能尚未在网页端完成首次注册。请先授权手机号并让玩家在网页输入6位数密码注册，或发送 <code>/users</code> 查看当前已注册玩家。`
+    );
   }
 
   // 9. 重启服务

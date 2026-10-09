@@ -239,6 +239,15 @@ export function saveUser(user: UserProfile): void {
         all.push(user);
       }
       localStorage.setItem(STORAGE_KEY_ALL_ACCOUNTS, JSON.stringify(all));
+
+      // 异步上报至服务端数据库 (保持跨设备数据一致)
+      if (typeof window !== 'undefined' && user.isLoggedIn) {
+        fetch('/api/auth/sync-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user })
+        }).catch(() => {});
+      }
     }
   } catch (e) {
     console.error('Failed to save user', e);
@@ -370,6 +379,93 @@ export function getAllAccounts(): UserProfile[] {
   return DEFAULT_PRESEEDED_ACCOUNTS;
 }
 
+/**
+ * 从服务端同步已注册玩家列表，确保在其他手机上注册的玩家也能在本地立刻识别
+ */
+export async function syncRegisteredAccounts(): Promise<UserProfile[]> {
+  const endpoints = [
+    `/api/auth/accounts?_t=${Date.now()}`,
+    `/users.json?_t=${Date.now()}`
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0) {
+          const current = getAllAccounts();
+          // 以服务端数据为准合并
+          const map = new Map<string, UserProfile>();
+          for (const acc of current) map.set(normalizePhoneNumber(acc.phone), acc);
+          for (const acc of list) {
+            const key = normalizePhoneNumber(acc.phone);
+            const prev = map.get(key);
+            map.set(key, { ...prev, ...acc, phone: key });
+          }
+          const merged = Array.from(map.values());
+          try {
+            localStorage.setItem(STORAGE_KEY_ALL_ACCOUNTS, JSON.stringify(merged));
+          } catch (e) {}
+          return merged;
+        }
+      }
+    } catch (err) {}
+  }
+
+  return getAllAccounts();
+}
+
+/**
+ * 双向同步：将本地已注册的账号上传到服务端（防止以前只存在于第一台手机 localStorage 中的账号在服务端缺失）
+ */
+export async function syncLocalAccountsToServer(): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const localAccounts = getAllAccounts();
+    const currentUser = getStoredUser();
+    const map = new Map<string, UserProfile>();
+
+    for (const acc of localAccounts) {
+      const p = normalizePhoneNumber(acc.phone);
+      if (p) map.set(p, acc);
+    }
+    if (currentUser.isLoggedIn && currentUser.phone) {
+      const p = normalizePhoneNumber(currentUser.phone);
+      if (p) map.set(p, currentUser);
+    }
+
+    const accountsToUpload = Array.from(map.values());
+    if (accountsToUpload.length === 0) return;
+
+    for (const acc of accountsToUpload) {
+      const phone = normalizePhoneNumber(acc.phone);
+      if (!phone) continue;
+
+      try {
+        await fetch('/api/auth/sync-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: acc })
+        });
+      } catch (e) {}
+    }
+  } catch (e) {}
+}
+
+if (typeof window !== 'undefined') {
+  syncRegisteredAccounts().catch(() => {});
+  syncLocalAccountsToServer().catch(() => {});
+}
+
 export async function registerWithPhone(
   phone: string,
   nickname: string,
@@ -383,7 +479,48 @@ export async function registerWithPhone(
   if (!cleanPhone) {
     return { success: false, message: '请输入正确的手机号！' };
   }
+  if (!cleanNickname) {
+    return { success: false, message: '请输入玩家昵称！' };
+  }
+  if (cleanPassword.length !== 6) {
+    return { success: false, message: '密码必须为 6 位数字符（不限大小写字母/数字）！' };
+  }
 
+  const chosenAvatar = avatar || AVATAR_OPTIONS[Math.floor(Math.random() * AVATAR_OPTIONS.length)];
+
+  // 1. 优先调用服务端全服统一注册 API (保证存入服务器，别的手机也能登录)
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: cleanPhone,
+        nickname: cleanNickname,
+        password: cleanPassword,
+        avatar: chosenAvatar
+      })
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (res.ok && data?.success && data.user) {
+      saveUser(data.user);
+      syncRegisteredAccounts().catch(() => {});
+      return {
+        success: true,
+        message: data.message || '🎉 注册成功，欢迎加入十三水对战场！',
+        user: data.user
+      };
+    }
+
+    if (data?.message) {
+      return { success: false, message: data.message };
+    }
+  } catch (err) {
+    console.warn('[Register] 服务端连接异常，使用本地备选流程', err);
+  }
+
+  // 2. 本地备选流程 (网络隔离或离线单机场景)
   const latestList = await syncAuthorizedPhones();
   const normalizedList = latestList.map(normalizePhoneNumber);
 
@@ -394,21 +531,12 @@ export async function registerWithPhone(
     };
   }
 
-  if (!cleanNickname) {
-    return { success: false, message: '请输入玩家昵称！' };
-  }
-
-  if (cleanPassword.length !== 6) {
-    return { success: false, message: '密码必须为 6 位数字符（不限大小写字母/数字）！' };
-  }
-
   const accounts = getAllAccounts();
-  const existing = accounts.find((a) => a.phone === cleanPhone);
+  const existing = accounts.find((a) => normalizePhoneNumber(a.phone) === cleanPhone);
   if (existing) {
     return { success: false, message: '该手机号已注册，请直接登录！' };
   }
 
-  const chosenAvatar = avatar || AVATAR_OPTIONS[Math.floor(Math.random() * AVATAR_OPTIONS.length)];
   const newUser: UserProfile = {
     id: `u_${cleanPhone.slice(-4)}_${Date.now()}`,
     phone: cleanPhone,
@@ -431,10 +559,10 @@ export async function registerWithPhone(
   return { success: true, message: '🎉 注册成功，欢迎加入十三水对战场！', user: newUser };
 }
 
-export function loginWithPhone(
+export async function loginWithPhone(
   phone: string,
   password: string
-): { success: boolean; message: string; user?: UserProfile } {
+): Promise<{ success: boolean; message: string; user?: UserProfile }> {
   const cleanPhone = normalizePhoneNumber(phone);
   const cleanPassword = password.trim();
 
@@ -445,11 +573,68 @@ export function loginWithPhone(
     return { success: false, message: '请输入 6 位密码！' };
   }
 
+  // 1. 核心关键：发起服务端跨设备登录校验 (解决另一台手机提示未找到账号的问题)
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: cleanPhone, password: cleanPassword })
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (res.ok && data?.success && data.user) {
+      saveUser(data.user);
+      syncRegisteredAccounts().catch(() => {});
+      return {
+        success: true,
+        message: data.message || '✓ 登录成功，正在进入游戏大厅...',
+        user: data.user
+      };
+    }
+
+    if (data && data.message) {
+      return { success: false, message: data.message };
+    }
+  } catch (err) {
+    console.warn('[Login] 无法连接服务端账号验证接口，尝试本地离线比对', err);
+  }
+
+  // 2. 尝试从服务端拉取一次最新账号列表再验证
+  await syncRegisteredAccounts().catch(() => {});
+
+  // 3. 本地离线凭证核验
   const accounts = getAllAccounts();
   const account = accounts.find((a) => normalizePhoneNumber(a.phone) === cleanPhone);
 
   if (!account) {
-    return { success: false, message: '未找到该手机号账号，请先注册！' };
+    if (isPhoneAuthorized(cleanPhone)) {
+      const autoUser: UserProfile = {
+        id: `u_${cleanPhone.slice(-4)}_${Date.now()}`,
+        phone: cleanPhone,
+        password: cleanPassword,
+        nickname: `雀友_${cleanPhone.slice(-4)}`,
+        avatar: '🧙',
+        token: `tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        chips: 1000,
+        isLoggedIn: true,
+        totalGames: 0,
+        totalWins: 0,
+        gunShots: 0,
+        grandSlams: 0,
+        specialHands: 0,
+        createdAt: Date.now(),
+        lastLoginAt: Date.now()
+      };
+      saveUser(autoUser);
+      syncLocalAccountsToServer().catch(() => {});
+      return { success: true, message: '✓ 白名单授权验证通过，已为您激活账号并进入大厅！', user: autoUser };
+    }
+
+    return {
+      success: false,
+      message: `未找到手机号 (${cleanPhone}) 的注册账号！请先在 Telegram Bot 发送 /auth ${cleanPhone} 获取授权。`
+    };
   }
 
   if (account.password && account.password !== cleanPassword) {
@@ -563,20 +748,20 @@ export function recordChipTransfer(record: ChipTransferRecord): void {
 }
 
 /**
- * 玩家之间相互赠送积分 (Mutual Transfer)
+ * 玩家之间相互赠送积分 (Mutual Transfer，跨设备网络同步)
  */
-export function transferChips(
+export async function transferChips(
   targetPhone: string,
   amount: number,
   note = '牌友互赠水数'
-): { success: boolean; message: string; fromUser?: UserProfile; toUser?: UserProfile } {
+): Promise<{ success: boolean; message: string; fromUser?: UserProfile; toUser?: UserProfile }> {
   const fromUser = getStoredUser();
 
   if (!fromUser.isLoggedIn) {
     return { success: false, message: '请先登录游戏账号后再进行积分赠送！' };
   }
 
-  const cleanTargetPhone = targetPhone.trim();
+  const cleanTargetPhone = normalizePhoneNumber(targetPhone);
   if (!cleanTargetPhone) {
     return { success: false, message: '请输入要赠送的玩家手机号！' };
   }
@@ -596,8 +781,57 @@ export function transferChips(
     };
   }
 
+  // 1. 优先调用服务端转账接口 (跨手机跨设备实时到账)
+  try {
+    const res = await fetch('/api/auth/transfer-chips', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fromPhone: fromUser.phone,
+        toPhone: cleanTargetPhone,
+        amount,
+        note
+      })
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (res.ok && data?.success && data.fromUser) {
+      saveUser(data.fromUser);
+      // 记录本地转账历史
+      const record: ChipTransferRecord = {
+        id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        fromPhone: fromUser.phone,
+        fromNickname: fromUser.nickname,
+        fromAvatar: fromUser.avatar,
+        toPhone: cleanTargetPhone,
+        toNickname: data.toUser?.nickname || cleanTargetPhone,
+        toAvatar: data.toUser?.avatar || '😎',
+        amount,
+        note: note || '牌友互助',
+        timestamp: Date.now()
+      };
+      recordChipTransfer(record);
+      syncRegisteredAccounts().catch(() => {});
+
+      return {
+        success: true,
+        message: data.message || `🎉 成功向 [${data.toUser?.nickname || cleanTargetPhone}] 赠送 ${amount.toLocaleString()} 积分水数！`,
+        fromUser: data.fromUser,
+        toUser: data.toUser
+      };
+    }
+
+    if (data?.message) {
+      return { success: false, message: data.message };
+    }
+  } catch (err) {
+    console.warn('[Transfer] 服务端转账网络异常，使用本地离线转账备选', err);
+  }
+
+  // 2. 本地离线备选
   const accounts = getAllAccounts();
-  const targetIndex = accounts.findIndex((a) => a.phone === cleanTargetPhone);
+  const targetIndex = accounts.findIndex((a) => normalizePhoneNumber(a.phone) === cleanTargetPhone);
 
   if (targetIndex < 0) {
     return {

@@ -24,7 +24,9 @@ import {
   deleteTelegramWebhook,
   getTelegramMe,
   runBotDiagnostics,
-  getAuthorizedPhones
+  getAuthorizedPhones,
+  getRegisteredUsers,
+  saveRegisteredUsers
 } from './scripts/tgBotCore.js';
 
 // 1. 自动定位并加载 .env 环境变量
@@ -311,6 +313,304 @@ app.get(['/api/authorized-phones', '/authorized_phones.json'], (req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json(getAuthorizedPhones());
+});
+
+// 8.1 玩家全服统一注册与跨设备登录接口 (解决在不同手机上登录提示未找到账号的问题)
+function normalizePhone(raw) {
+  if (!raw) return '';
+  const digits = String(raw).replace(/[\s\-()]/g, '');
+  return digits.replace(/^(\+?86|0086)/, '').trim();
+}
+
+// 手机号注册 (带白名单强校验，入库 users.json)
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const { phone, nickname, password, avatar } = req.body || {};
+    const cleanPhone = normalizePhone(phone);
+    const cleanNickname = (nickname || '').trim();
+    const cleanPassword = (password || '').trim();
+
+    if (!cleanPhone || !/^1[3-9]\d{9}$/.test(cleanPhone)) {
+      return res.status(400).json({ success: false, message: '请输入有效的11位手机号码！' });
+    }
+
+    // 校验白名单
+    const authList = getAuthorizedPhones().map(normalizePhone);
+    if (!authList.includes(cleanPhone)) {
+      return res.status(403).json({
+        success: false,
+        message: `⚠️ 手机号 (${cleanPhone}) 尚未获得管理员授权！请在 Telegram Bot 发送：/auth ${cleanPhone}`
+      });
+    }
+
+    if (!cleanNickname) {
+      return res.status(400).json({ success: false, message: '请输入玩家昵称！' });
+    }
+
+    if (cleanPassword.length !== 6) {
+      return res.status(400).json({ success: false, message: '密码必须为 6 位数字符！' });
+    }
+
+    const users = getRegisteredUsers();
+    const existingIndex = users.findIndex((u) => normalizePhone(u.phone) === cleanPhone);
+
+    if (existingIndex >= 0) {
+      // 若该账号已存在（如 Bot 预制默认账号或既往登记），允许更新昵称与密码并登录
+      const existing = users[existingIndex];
+      existing.password = cleanPassword;
+      existing.nickname = cleanNickname;
+      if (avatar) existing.avatar = avatar;
+      existing.isLoggedIn = true;
+      existing.lastLoginAt = Date.now();
+      saveRegisteredUsers(users);
+
+      console.log(`[Auth API] ✓ 玩家更新资料/重置密码登录 [${cleanNickname}] (手机: ${cleanPhone})`);
+      return res.json({
+        success: true,
+        message: '🎉 账号资料更新成功，欢迎进入游戏大厅！',
+        user: existing
+      });
+    }
+
+    const newUser = {
+      id: `u_${cleanPhone.slice(-4)}_${Date.now()}`,
+      phone: cleanPhone,
+      password: cleanPassword,
+      nickname: cleanNickname,
+      avatar: avatar || '😎',
+      token: `tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      chips: 1000,
+      isLoggedIn: true,
+      totalGames: 0,
+      totalWins: 0,
+      gunShots: 0,
+      grandSlams: 0,
+      specialHands: 0,
+      createdAt: Date.now(),
+      lastLoginAt: Date.now()
+    };
+
+    users.push(newUser);
+    saveRegisteredUsers(users);
+
+    console.log(`[Auth API] ✓ 玩家注册成功 [${cleanNickname}] (手机: ${cleanPhone})，已同步保存至服务端`);
+    res.json({
+      success: true,
+      message: '🎉 注册成功，欢迎加入十三水对战场！',
+      user: newUser
+    });
+  } catch (err) {
+    console.error('[Auth API Register Error]', err);
+    res.status(500).json({ success: false, message: '服务端注册异常，请稍后重试' });
+  }
+});
+
+// 手机号登录 (全设备通用校验与跨设备自动激活)
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { phone, password } = req.body || {};
+    const cleanPhone = normalizePhone(phone);
+    const cleanPassword = (password || '').trim();
+
+    if (!cleanPhone) {
+      return res.status(400).json({ success: false, message: '请输入手机号码！' });
+    }
+    if (!cleanPassword) {
+      return res.status(400).json({ success: false, message: '请输入 6 位密码！' });
+    }
+
+    const users = getRegisteredUsers();
+    let user = users.find((u) => normalizePhone(u.phone) === cleanPhone);
+
+    if (!user) {
+      // 🌟 跨设备核心解决策略：
+      // 如果在别的手机打开页面，账号尚未存入 users.json，但只要手机号已在 Telegram Bot 授权白名单中：
+      // 自动以此密码为其激活创建全服统一账号，彻底杜绝“未找到该手机号账号”！
+      const authList = getAuthorizedPhones().map(normalizePhone);
+      if (authList.includes(cleanPhone)) {
+        if (cleanPassword.length !== 6) {
+          return res.status(400).json({
+            success: false,
+            message: '检测到您的手机号已获 Telegram 授权！首次在此手机登录请输入 6 位密码以完成激活。'
+          });
+        }
+
+        user = {
+          id: `u_${cleanPhone.slice(-4)}_${Date.now()}`,
+          phone: cleanPhone,
+          password: cleanPassword,
+          nickname: `雀友_${cleanPhone.slice(-4)}`,
+          avatar: '😎',
+          token: `tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          chips: 1000,
+          isLoggedIn: true,
+          totalGames: 0,
+          totalWins: 0,
+          gunShots: 0,
+          grandSlams: 0,
+          specialHands: 0,
+          createdAt: Date.now(),
+          lastLoginAt: Date.now()
+        };
+
+        users.push(user);
+        saveRegisteredUsers(users);
+        console.log(`[Auth API] ✓ 授权手机号跨设备直接激活登录成功 [${user.nickname}] (手机: ${cleanPhone})`);
+
+        return res.json({
+          success: true,
+          message: '✓ 授权白名单核验通过！已自动为您激活并登录游戏大厅。',
+          user
+        });
+      }
+
+      return res.status(404).json({
+        success: false,
+        message: `未找到手机号 (${cleanPhone}) 的注册账号！该手机号尚未在 Telegram Bot 获得授权，请在机器人中发送：/auth ${cleanPhone}`
+      });
+    }
+
+    // 校验密码 (兼容内置初始账号默认密码 888888 或新设定密码)
+    const expectedPassword = user.password || '888888';
+    if (expectedPassword !== cleanPassword) {
+      return res.status(401).json({
+        success: false,
+        message: '密码错误！请输入正确的 6 位密码（默认密码为 888888）。'
+      });
+    }
+
+    // 更新最后登录时间与在线状态
+    user.lastLoginAt = Date.now();
+    user.isLoggedIn = true;
+    saveRegisteredUsers(users);
+
+    console.log(`[Auth API] ✓ 玩家登录成功 [${user.nickname}] (手机: ${cleanPhone})`);
+    res.json({
+      success: true,
+      message: '✓ 登录成功，欢迎回到十三水竞技场！',
+      user
+    });
+  } catch (err) {
+    console.error('[Auth API Login Error]', err);
+    res.status(500).json({ success: false, message: '服务端登录异常，请稍后重试' });
+  }
+});
+
+// 玩家档案更新与跨设备双向同步
+app.post('/api/auth/sync-profile', (req, res) => {
+  try {
+    const { user } = req.body || {};
+    if (!user || !user.phone) {
+      return res.status(400).json({ success: false, message: '缺少玩家资料' });
+    }
+
+    const cleanPhone = normalizePhone(user.phone);
+    const users = getRegisteredUsers();
+    const idx = users.findIndex((u) => normalizePhone(u.phone) === cleanPhone);
+
+    if (idx >= 0) {
+      users[idx] = {
+        ...users[idx],
+        ...user,
+        phone: cleanPhone,
+        password: user.password || users[idx].password || '888888',
+        lastLoginAt: Date.now()
+      };
+      saveRegisteredUsers(users);
+      res.json({ success: true, user: users[idx] });
+    } else {
+      // 允许同步上传本地旧设备已有账号到服务端 (防止数据仅存在于手机本地 localStorage)
+      const newUser = {
+        id: user.id || `u_${cleanPhone.slice(-4)}_${Date.now()}`,
+        phone: cleanPhone,
+        password: user.password || '888888',
+        nickname: (user.nickname || `雀友_${cleanPhone.slice(-4)}`).trim(),
+        avatar: user.avatar || '😎',
+        token: user.token || `tok_${Date.now()}`,
+        chips: typeof user.chips === 'number' ? user.chips : 1000,
+        isLoggedIn: true,
+        totalGames: user.totalGames || 0,
+        totalWins: user.totalWins || 0,
+        gunShots: user.gunShots || 0,
+        grandSlams: user.grandSlams || 0,
+        specialHands: user.specialHands || 0,
+        createdAt: user.createdAt || Date.now(),
+        lastLoginAt: Date.now()
+      };
+      users.push(newUser);
+      saveRegisteredUsers(users);
+      console.log(`[Auth API] ✓ 同步上传旧设备玩家账号到服务端 [${newUser.nickname}] (手机: ${cleanPhone})`);
+      res.json({ success: true, user: newUser });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: '同步档案失败' });
+  }
+});
+
+// 玩家积分互赠接口 (跨设备即时生效)
+app.post('/api/auth/transfer-chips', (req, res) => {
+  try {
+    const { fromPhone, toPhone, amount, note } = req.body || {};
+    const cleanFrom = normalizePhone(fromPhone);
+    const cleanTo = normalizePhone(toPhone);
+    const numAmount = parseInt(amount, 10);
+
+    if (!cleanFrom || !cleanTo) {
+      return res.status(400).json({ success: false, message: '手机号不能为空' });
+    }
+    if (cleanFrom === cleanTo) {
+      return res.status(400).json({ success: false, message: '不能转账给自己' });
+    }
+    if (!numAmount || numAmount <= 0) {
+      return res.status(400).json({ success: false, message: '转账数额无效' });
+    }
+
+    const users = getRegisteredUsers();
+    const sender = users.find((u) => normalizePhone(u.phone) === cleanFrom);
+    const receiver = users.find((u) => normalizePhone(u.phone) === cleanTo);
+
+    if (!sender) {
+      return res.status(404).json({ success: false, message: '赠送方账号未找到' });
+    }
+    if (!receiver) {
+      return res.status(404).json({ success: false, message: `未找到手机号为 ${cleanTo} 的注册玩家！` });
+    }
+
+    if ((sender.chips || 0) < numAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `积分不足！当前仅持有 ${Number(sender.chips || 0).toLocaleString()} 水，无法赠送 ${numAmount.toLocaleString()} 水。`
+      });
+    }
+
+    sender.chips = (sender.chips || 0) - numAmount;
+    receiver.chips = (receiver.chips || 0) + numAmount;
+    saveRegisteredUsers(users);
+
+    console.log(`[Auth API] 💸 水数转账: [${sender.nickname}] -> [${receiver.nickname}] +${numAmount} 水`);
+    res.json({
+      success: true,
+      message: `🎉 成功向 [${receiver.nickname}] 赠送 ${numAmount.toLocaleString()} 积分水数！`,
+      fromUser: sender,
+      toUser: receiver
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: '转账操作失败' });
+  }
+});
+
+// 获取所有公开玩家列表 (脱敏密码，用于手机号搜索与榜单)
+app.get(['/api/auth/accounts', '/users.json'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  const users = getRegisteredUsers();
+  // 脱敏密码
+  const sanitized = users.map((u) => {
+    const { password, ...rest } = u;
+    return rest;
+  });
+  res.json(sanitized);
 });
 
 // 9. Telegram Webhook 核心接入路由与健康诊断

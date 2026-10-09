@@ -98,13 +98,60 @@ npm run bot
 | :--- | :--- | :--- |
 | **生产极速启动 (推荐)** | `npm start` | 全部 (Termux / Linux / Serv00) |
 | **低内存极速启动** | `npm run start:lowmem` | Serv00 (512MB配额) / 低配机型 |
-| **低内存资源构建** | `npm run build:lowmem` | Serv00 / 树莓派 |
+| **彻底删除旧编译产物** | `npm run clean` (或 `rm -rf dist node_modules/.vite`) | 全部 |
+| **重新编译构建 (覆盖旧文件)** | `npm run build` | 全部 (Termux / Linux VPS) |
+| **低内存编译覆盖 (防超限)** | `npm run build:lowmem` | Serv00 (512MB配额) / 树莓派 |
 | **开发热重载启动 (8080)** | `npm run dev:8080` | 开发测试 |
 | **PM2 生产守护启动** | `pm2 start ecosystem.config.cjs` | Linux VPS / Serv00 |
-| **Docker 容器化启动** | `docker compose up -d --build` | Linux (Docker) |
+| **PM2 平滑更新重启** | `pm2 reload shisanshui` | Linux VPS |
+| **Docker 容器化更新构建** | `docker compose build --no-cache && docker compose up -d` | Linux (Docker) |
 | **启动 Telegram 运维机器人** | `npm run bot` | 全部 |
-| **拉取 GitHub 最新代码** | `git pull` | 全部 |
+| **拉取 GitHub 最新代码** | `git pull origin main` | 全部 |
 | **代码语法校验** | `npm run lint` | 全部 |
+
+---
+
+## 🔄 仓库代码更新后：删除旧文件重新编译 / 覆盖全流程
+
+当远程仓库更新后，若直接运行可能因旧的静态文件缓存或残留 hash 文件造成加载异常。各平台规范更新与清理编译步骤如下：
+
+### 📱 Android Termux 手机端
+```bash
+cd ~/sx
+pkill -f node                                     # 停止旧服务
+git pull origin main && npm install               # 拉取最新代码
+rm -rf dist node_modules/.vite                    # 删除旧文件与构建缓存
+npm run build                                     # 重新编译生成全新静态文件覆盖
+npm start                                         # 重新启动服务
+
+# ⚡ 一键连招命令：
+cd ~/sx && pkill -f node; git pull && rm -rf dist && npm run build && npm start
+```
+
+### 🐧 Linux VPS 云服务器 (PM2 守护)
+```bash
+cd /var/www/shisanshui
+git pull origin main && npm install               # 拉取代码与依赖
+rm -rf dist node_modules/.vite                    # 彻底删除旧编译文件
+npm run build                                     # 重新编译覆盖
+pm2 reload shisanshui                             # PM2 零停机平滑重载
+
+# ⚡ 一键连招命令：
+git pull && rm -rf dist && npm run build && pm2 reload shisanshui
+```
+
+### 🌐 Serv00 (FreeBSD 虚拟主机)
+```bash
+cd ~/sx
+killall -9 node                                   # 杀掉旧 node 腾出 512MB 内存
+git pull origin main                              # 拉取最新代码
+rm -rf dist node_modules/.vite                    # 删除旧文件与缓存
+npm run build:lowmem                              # 384MB 低内存编译覆盖旧文件
+nohup npm run start:lowmem > server.log 2>&1 &   # 后台拉起服务
+
+# ⚡ 一键连招命令：
+cd ~/sx && killall -9 node; git pull && rm -rf dist && npm run build:lowmem && nohup npm run start:lowmem > server.log 2>&1 &
+```
 
 ---
 

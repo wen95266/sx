@@ -158,7 +158,51 @@ cd ~/sx && npm start
 
 ---
 
-## ❓ 常见问题排查 (FAQ)
+## 🔄 第六部分：Termux 拉取仓库更新、删除旧文件与重新编译全流程
+
+当 GitHub 仓库更新了最新代码后，由于安卓手机存储机制及手机浏览器强缓存特性，必须规范执行**停止旧服务 ➔ 拉取最新代码 ➔ 彻底删除旧编译文件 ➔ 重新构建覆盖 ➔ 重新拉起**：
+
+### 1. 标准规范更新流程
+
+```bash
+# 1. 进入手机项目根目录
+cd ~/sx
+
+# 2. 停止当前正在运行的旧游戏服务 (释放 8080 端口与手机内存)
+pkill -f node
+
+# 3. 拉取 GitHub 仓库最新代码
+git pull origin main
+
+# 4. 如有新增依赖包，执行安装
+npm install
+
+# 5. 彻底删除旧编译静态文件与 Vite 构建缓存 (避免旧牌面样式与逻辑残留)
+rm -rf dist node_modules/.vite
+# 或运行项目内置清理命令:
+npm run clean
+
+# 6. 重新编译静态资源并覆盖旧文件
+npm run build
+
+# 7. 重新启动全新服务端
+npm start
+```
+
+> 💡 **Termux 一键极速连招更新命令（手机端推荐收藏）**：
+> ```bash
+> cd ~/sx && pkill -f node; git pull && rm -rf dist && npm run build && npm start
+> ```
+
+> 💡 **如果在 tmux 后台会话中运行**：
+> 1. 先进入原有会话：`tmux attach -t sx`
+> 2. 按键盘 `Ctrl + C` 终止正在运行的旧服务。
+> 3. 粘贴执行：`git pull && rm -rf dist && npm run build && npm start`
+> 4. 按 `Ctrl + B` 然后按 `D` 安全脱离会话，后台持续无忧运行！
+
+---
+
+## ❓ 第七部分：常见问题排查 (FAQ)
 
 ### Q1：提示 `Error: listen EADDRINUSE: address already in use :::8080`
 **原因**：旧的服务端进程还在后台运行占用了 8080 端口。  
@@ -168,11 +212,14 @@ pkill -f "node"
 npm start
 ```
 
-### Q2：更新代码后牌面样式或逻辑未生效？
-**解决**：
-```bash
-git pull
-npm run build
-npm start
-```
-刷新手机浏览器页面即可加载最新版。
+### Q2：更新代码后手机打开仍然显示旧版本、旧牌面或旧聊天界面？
+**原因**：未删除旧 `dist` 编译产物，或者手机浏览器（Chrome/夸克/自带浏览器）开启了激进的本地静态资源强缓存。  
+**彻底解决步骤**：
+1. **服务器端删除旧文件重新编译**：
+   ```bash
+   cd ~/sx && rm -rf dist node_modules/.vite && npm run build
+   pkill -f node && npm start
+   ```
+2. **手机浏览器端刷新**：
+   - 在手机浏览器设置中清除当前站点的“缓存图片和文件”。
+   - 或使用手机浏览器的【无痕模式/隐身标签页】重新打开 `http://127.0.0.1:8080`，即可 100% 确保加载最新编译的游戏程序！

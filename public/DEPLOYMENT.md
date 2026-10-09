@@ -1,92 +1,135 @@
-# 🀄 十三水（Chinese Poker）Go 语言多人在线对战系统部署手册
+# 🀄 十三水（Chinese Poker）全平台多人对战系统部署与运维手册
 
-基于 Go 语言高性能并发架构开发的十三水多人扑克对战系统。支持 Android Termux 手机端极速部署、局域网直连联机、Cloudflare 穿透公网联机、Telegram Bot 远程运维管理、三道智能理牌、打枪/全垒打/特殊牌型结算与 53 张矢量 SVG 扑克牌实时渲染。
-
----
-
-## ⚡ 1. 终极一键全自动启动（推荐）
-
-在 Android Termux 终端中，直接粘贴运行以下一条命令，全自动完成环境检测、依赖安装、编译构建、后台运行并接入牌局：
-
-```bash
-curl -sSL https://raw.githubusercontent.com/your-username/shisanshui/main/start.sh | bash
-```
-
-或克隆仓库后运行：
-
-```bash
-git clone https://github.com/your-username/shisanshui.git
-cd shisanshui
-bash start.sh
-```
+> 📦 **官方开源仓库**：`https://github.com/wen95266/sx.git`  
+> 💻 **支持系统**：Android Termux | Linux VPS (Ubuntu/Debian/CentOS) | Serv00 (FreeBSD 虚拟主机) | Docker 容器
 
 ---
 
-## 🛠️ 2. 手动分步安装与编译
+## ⚡ 1. 跨平台统一极速起步
 
-如果您希望手动分步执行：
+在 Android Termux 或 Linux 服务器终端中，执行以下标准命令快速启动：
 
-### 第一步：更新 Termux 并安装基础依赖
 ```bash
-pkg update -y && pkg upgrade -y
-pkg install -y golang git net-tools
+# 1. 克隆源码并进入目录
+git clone https://github.com/wen95266/sx.git
+cd sx
+
+# 2. 安装依赖包
+npm install
+
+# 3. 生产打包并启动 (超轻量设计，运行仅占 25MB~30MB 内存)
+npm run build
+npm start
+```
+服务将在 `http://0.0.0.0:8080` 启动，浏览器打开即可畅玩！
+
+---
+
+## 🔄 2. 核心：代码更新、删除旧文件与重新编译覆盖教程
+
+当远程仓库更新后，为了杜绝旧的静态资源缓存残留、哈希错乱或运行错误，**必须在拉取更新后删除旧编译文件重新编译覆盖**：
+
+### 📱 Android Termux 手机端更新规范
+```bash
+cd ~/sx
+
+# 1. 杀掉旧服务释放端口
+pkill -f node
+
+# 2. 拉取最新代码并安装新依赖
+git pull origin main && npm install
+
+# 3. 彻底删除旧编译产物与 Vite 缓存 (核心)
+rm -rf dist node_modules/.vite   # 或运行 npm run clean
+
+# 4. 重新编译生成全新静态文件覆盖
+npm run build
+
+# 5. 重新启动服务
+npm start
+
+# 💡 Termux 一键连招更新命令：
+cd ~/sx && pkill -f node; git pull && rm -rf dist && npm run build && npm start
 ```
 
-### 第二步：克隆源码并编译
+### 🐧 Linux VPS 云服务器 (PM2 / Systemd / Docker)
 ```bash
-git clone https://github.com/your-username/shisanshui.git
-cd shisanshui
-go mod tidy
-go build -o server cmd/server/main.go
-go build -o client cmd/client/main.go
+cd /var/www/shisanshui
+
+# 1. 拉取仓库最新代码
+git pull origin main && npm install
+
+# 2. 删除旧编译文件夹
+rm -rf dist node_modules/.vite   # 或运行 npm run clean
+
+# 3. 重新编译覆盖
+npm run build
+
+# 4. 平滑重载进程 (零停机):
+pm2 reload shisanshui
+# 若使用 Systemd: sudo systemctl restart shisanshui
+# 若使用 Docker: docker compose build --no-cache && docker compose up -d
+
+# 💡 Linux PM2 一键连招命令：
+git pull && rm -rf dist && npm run build && pm2 reload shisanshui
 ```
 
-### 第三步：启动后台服务
+### 🌐 Serv00 (FreeBSD 虚拟主机，512MB 内存严格配额)
 ```bash
-# 启动服务端 (监听 0.0.0.0:8080)
-nohup ./server > server.log 2>&1 &
+cd ~/sx
 
-# 启动客户端直接进入对局
-./client
+# 1. 杀掉旧 node 进程腾出 512MB 编译器内存空间
+killall -9 node
+
+# 2. 拉取最新代码
+git pull origin main
+
+# 3. 删除旧编译文件与缓存
+rm -rf dist node_modules/.vite   # 或运行 npm run clean
+
+# 4. 使用 Serv00 专用低内存模式编译覆盖 (限制 384MB 避免被 kill)
+npm run build:lowmem
+
+# 5. 后台重新拉起服务
+nohup npm run start:lowmem > server.log 2>&1 &
+# 若使用 Passenger 域名托管: devil www restart 你的域名.serv00.net
+
+# 💡 Serv00 一键连招命令：
+cd ~/sx && killall -9 node; git pull && rm -rf dist && npm run build:lowmem && nohup npm run start:lowmem > server.log 2>&1 &
 ```
 
 ---
 
 ## 🤖 3. Telegram 机器人远程运维管理配置
 
-1. 在 Telegram 搜索 `@BotFather` 创建新机器人并获取 **Bot Token**（格式如 `7182938491:AAH8...`）。
-2. 在 Telegram 搜索 `@userinfobot` 获取您的 **Telegram User ID**（数字格式如 `583920192`）。
-3. 在启动服务端前设置环境变量：
+1. 在 Telegram 搜索 `@BotFather` 获取 **Bot Token**。
+2. 搜索 `@userinfobot` 获取您的 **Telegram User ID**。
+3. 在项目根目录 `.env` 填入配置：
 ```bash
-export TG_BOT_TOKEN="您的BotToken"
-export TG_ADMIN_ID="您的TelegramID"
-./server
+cat << 'EOF' > .env
+PORT=8080
+TG_BOT_TOKEN="你的Telegram_Bot_Token"
+TG_ADMIN_ID="你的Telegram_User_ID"
+EOF
 ```
-4. 管理员指令列表：
-- `/status`：查看服务器 CPU、内存、协程与在线人数
-- `/rooms`：查看当前活跃对战房间
-- `/players`：查看当前在线玩家清单
-- `/broadcast <内容>`：向全服所有房间广播系统公告
-- `/restartroom <房号>`：重置并清理指定房间
-- `/logs`：查看最新核心操作日志
+4. 启动机器人运维：
+```bash
+npm run bot
+```
+管理指令包含：`/status`（查看系统平台与内存）、`/auth <手机号>`（授权玩家白名单）、`/broadcast <公告>`（全服广播飘屏弹幕）、`/rooms`（监控房间）。
 
 ---
 
 ## 🌐 4. Cloudflare 隧道公网穿透（免公网IP）
 
 ```bash
-# 安装 cloudflared
+# Termux 安装 cloudflared
 pkg install -y cloudflared
 
-# 快速免费临时隧道
-cloudflared tunnel --url http://localhost:8080
-
-# 绑定自定义域名
-cloudflared tunnel login
-cloudflared tunnel create shisanshui-tunnel
-cloudflared tunnel route dns shisanshui-tunnel poker.yourdomain.com
-cloudflared tunnel run --url http://localhost:8080 shisanshui-tunnel
+# 一键创建免费 HTTPS 临时隧道
+cloudflared tunnel --url http://127.0.0.1:8080
 ```
+将终端输出的 `https://xxxx.trycloudflare.com` 链接分享给好友即可跨网络联机对战！
 
 ---
 
@@ -98,6 +141,7 @@ cloudflared tunnel run --url http://localhost:8080 shisanshui-tunnel
 - **相公（倒牌）铁律**：头道 ≤ 中道 ≤ 尾道。违规直接判负。
 - **打枪（Gun Shot）**：三道全胜（3-0横扫），输赢水数翻倍（x2）。
 - **全垒打（Grand Slam）**：通杀同桌全部3位对手，水数翻四倍（x4）。
-- **两大板块区分**：
-  - **🔥 实时场**：随时秒开，全面开放局内抽屉聊天、发光飘屏弹幕与表情互动。
-  - **📅 预约场**：定时开赛、席位预订，全场静音纯净竞技（无局内聊天）。
+- **两大板块**：
+  - **🔥 实时场**：随时秒开，支持局内抽屉语音、文字、表情与飘屏弹幕。
+  - **📅 预约场**：定时开赛、席位预订、全场静音纯净竞技。
+

@@ -106,3 +106,18 @@ https://poker.yourdomain.com/?room=room_888
 - `/broadcast <内容>`：向所有正在打牌的玩家弹幕广播
 - `/kick <玩家ID>`：强制移出违规玩家
 - 每当游戏中有玩家打出【全垒打】或【至尊青龙】，Bot 会向您私聊发送高光战报！
+
+---
+
+### 第五步：代码更新与删除旧文件重新编译覆盖
+
+当仓库更新了新牌型或修复后，在 Termux 中执行以下命令删除旧文件并重新编译覆盖：
+```bash
+cd ~/sx
+pkill -f node
+git pull origin main
+rm -rf dist node_modules/.vite
+npm run build
+npm start
+```
+Cloudflare Tunnel 会保持长连接无缝将流量转发至全新编译的服务。

@@ -1655,6 +1655,14 @@ curl -sSL https://raw.githubusercontent.com/YOUR_USERNAME/shisanshui/main/start.
 ## 5. 局域网开黑
 • 好友手机连接同一 WiFi 或热点，在 Termux 运行:
   ./client -server="房主IP:8080" -name="好友昵称"
+
+## 6. 拉取代码更新、删除旧文件与重新编译覆盖
+• Termux 手机端:
+  cd ~/sx && pkill -f node; git pull && rm -rf dist && npm run build && npm start
+• Linux VPS:
+  cd /var/www/shisanshui && git pull && rm -rf dist && npm run build && pm2 reload shisanshui
+• Serv00 虚拟主机:
+  cd ~/sx && killall -9 node; git pull && rm -rf dist && npm run build:lowmem && nohup npm run start:lowmem > server.log 2>&1 &
 `
   },
   {

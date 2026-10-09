@@ -160,7 +160,54 @@ crontab -e
 
 ---
 
-## ❓ Serv00 常见问题与避坑指南
+## 🔄 第五部分：Serv00 拉取更新、删除旧文件与重新编译全流程
+
+在 Serv00 这种具备严格 512MB 内存配额的 FreeBSD 共享主机上，更新代码和重新编译有专属的低内存技巧。如果不清理旧文件或直接运行常规高内存编译，极易因瞬间内存超出配额而被系统强制 `kill -9`。
+
+### 1. 标准安全更新步骤
+
+```bash
+# 1. 进入项目根目录
+cd ~/sx
+
+# 2. 杀掉当前运行的旧 Node 进程以释放内存 (关键：腾出 512MB 配额给编译器使用)
+killall -9 node
+
+# 3. 拉取 GitHub 仓库最新代码
+git pull origin main
+
+# 4. 如有新增依赖包，执行安装
+npm install
+
+# 5. 彻底删除旧编译文件与缓存 (防止旧静态资源残留或哈希冲突)
+rm -rf dist node_modules/.vite
+# 或运行项目预设脚本:
+npm run clean
+
+# 6. 使用低内存专用模式重新编译 (严格将编译器内存压制在 384MB 以内)
+npm run build:lowmem
+
+# 7. 重新启动服务
+# 方式 A (前台测试确认):
+npm run start:lowmem
+
+# 方式 B (后台持久运行):
+nohup npm run start:lowmem > server.log 2>&1 &
+
+# 方式 C (如果配置了方案二 Passenger 域名托管):
+devil www restart 你的域名.serv00.net
+```
+
+> 💡 **Serv00 一键极速拉取更新并重编译命令**：
+> ```bash
+> cd ~/sx && git pull && rm -rf dist && npm run build:lowmem && nohup npm run start:lowmem > server.log 2>&1 &
+> ```
+> 
+> 💡 **无需担心后台退出**：如果您已按照第三部分配置了 Crontab 脚本 `scripts/serv00-keepalive.sh`，即使杀掉进程后未手动启动，FreeBSD 系统也将在 5 分钟内全自动检测并拉起全新编译的服务！
+
+---
+
+## ❓ 第六部分：Serv00 常见问题与避坑指南
 
 ### 1. 提示 `Out of memory` 或进程被 `Killed`
 **原因**：同时运行了太多进程或在 Serv00 执行了高耗能命令。  

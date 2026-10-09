@@ -200,14 +200,55 @@ sudo certbot --nginx -d poker.yourdomain.com
 
 ---
 
-## 🔄 第五部分：日常代码平滑热更新流程
+## 🔄 第五部分：代码更新、删除旧文件与重新编译全流程
 
-当仓库更新了新牌型算法、聊天表情或前端界面后，只需执行以下命令即可平滑重载：
+当 GitHub 仓库更新了代码、新功能或安全补丁后，为了防止旧的打包文件（`dist` 目录及 Vite 编译缓存）残留导致浏览器加载旧版本或冲突，推荐按以下规范流程执行拉取、删旧文件、重新编译与重载服务：
+
+### 1. 标准更新四步曲（以 PM2 部署为例）
 
 ```bash
+# 进入项目根目录
 cd /var/www/shisanshui
-git pull
+
+# ① 拉取仓库最新代码
+git pull origin main
+
+# ② 安装可能新增的依赖包 (如有新依赖)
+npm install
+
+# ③ 彻底删除旧编译文件与构建缓存 (核心步骤)
+# 方式 A (使用项目预设脚本):
+npm run clean
+# 方式 B (直接命令行清理 dist 产物与 Vite 缓存):
+rm -rf dist node_modules/.vite
+
+# ④ 重新编译静态资源并覆盖旧文件
 npm run build
+
+# ⑤ 平滑重载生产服务 (零停机时间)
 pm2 reload shisanshui
 echo "✓ 生产服务已平滑升级成功！"
 ```
+
+> 💡 **一键复制连续命令（日常极速推荐）**：
+> ```bash
+> cd /var/www/shisanshui && git pull && rm -rf dist && npm run build && pm2 reload shisanshui
+> ```
+
+---
+
+### 2. 针对不同进程管理器的重启方式
+
+根据您在【第二部分】选择的部署方案，执行对应的重启命令：
+
+| 方案 | 删旧文件重新编译后的重启命令 | 说明 |
+| :--- | :--- | :--- |
+| **方案 A：PM2 进程守护** | `pm2 reload shisanshui`<br>或 `pm2 restart shisanshui` | `reload` 为零停机平滑重载；`restart` 为硬重启重置全部连接 |
+| **方案 B：Systemd 系统服务** | `sudo systemctl restart shisanshui` | 重新拉起后台服务并自动加载全新的 `dist/` 文件 |
+| **方案 C：Docker 容器化** | `docker compose build --no-cache`<br>`docker compose up -d` | 废弃旧镜像缓存，重新构建并后台无缝启动新容器 |
+
+---
+
+### 3. 更新后客户端浏览器缓存刷新提示
+- 若玩家浏览器打开仍显示旧页面或旧弹窗，可提示玩家在手机或电脑浏览器按 `Ctrl + F5` 强制刷新，或清除站点缓存。
+- 服务端会实时提供最新的 HTTP ETag 与静态资源哈希，确保删除旧 `dist` 重新编译后所有玩家均同步至最新版本！
